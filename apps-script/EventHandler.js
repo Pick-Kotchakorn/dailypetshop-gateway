@@ -5,11 +5,11 @@
  */
 function handleEvent(event) {
   const userId = event.source.userId;
+  if (!userId) return;
   
   // 1. เรียก Loading ทันทีเพื่อให้ LINE แสดงสถานะ
   sendLoadingAnimation(userId);
 
-  // 2. แยกประเภท Event
   if (event.type === 'follow') {
     handleFollowEvent(event);
   } else if (event.type === 'message') {
@@ -23,11 +23,8 @@ function handleEvent(event) {
 function handleFollowEvent(event) {
   const userId = event.source.userId;
   const timestamp = new Date(event.timestamp);
+  const profile = getUserProfile(userId);
   
-  // 1. ดึงข้อมูลโปรไฟล์จาก LINE API
-  const profile = getUserProfile(userId); // เรียกใช้จาก LineAPI.gs
-  
-  // 2. เตรียมข้อมูลบันทึก (อ้างอิงโครงสร้าง Followers Sheet)
   const followerData = {
     userId: userId,
     displayName: profile.displayName || 'Unknown',
@@ -44,10 +41,8 @@ function handleFollowEvent(event) {
     totalMessages: 0
   };
 
-  // 3. บันทึกลง Sheet (เรียกใช้จาก SheetService.gs)
   upsertFollower(followerData);
 
-  // 4. บันทึกประวัติการสนทนาเป็น Log (ระบุ Intent เป็น system.follow)
   saveLog({
     userId: userId,
     displayName: profile.displayName,
@@ -61,21 +56,24 @@ function handleFollowEvent(event) {
  * จัดการเมื่อมี "ข้อความ" ส่งเข้ามา (Message Event)
  */
 function handleMessageEvent(event) {
+  if (event.message.type !== 'text') return;
+
   const userId = event.source.userId;
   const userMessage = event.message.text;
+  
+  // 1. ดึงโปรไฟล์เพื่อนำชื่อมาบันทึก Log และซ่อมข้อมูลที่หายไป
+  const profile = getUserProfile(userId);
 
-  // บันทึก Log การสนทนา
+  // 2. บันทึก Log การสนทนาลง Sheet Conversations
   saveLog({
     userId: userId,
+    displayName: profile.displayName || 'Customer', 
     userMessage: userMessage,
-    intent: "Message Received"
+    botReply: '[NO_REPLY]',
+    intent: 'general.chat'
   });
 
-  // 💡 จุดสำคัญ: อัปเดตข้อมูลผู้ติดตาม/สมาชิกที่นี่
-  const profile = getUserProfile(userId);
-  upsertFollower({
-    userId: userId,
-    displayName: profile.displayName,
-    lastInteraction: new Date()
-  });
+  // 🎯 3. คุณต้องเพิ่มบรรทัดนี้เข้าไปครับ! (สำคัญมาก)
+  // ถ้าไม่มีบรรทัดนี้ ข้อมูลในชีท Followers จะไม่ยอมอัปเดตเวลาและจำนวนข้อความครับ
+  updateFollowerInteraction(userId, profile); 
 }

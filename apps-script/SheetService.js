@@ -6,34 +6,20 @@
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   
-  // 1. สร้าง/ตรวจสอบ Sheet Followers
-  let followerSheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
-  if (!followerSheet) {
-    followerSheet = ss.insertSheet(CONFIG.SHEET_NAME.FOLLOWERS);
-    followerSheet.appendRow([
-      'User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 
-      'First Follow Date', 'Last Follow Date', 'Follow Count', 'Status', 
-      'Source Channel', 'Tags', 'Last Interaction', 'Total Messages'
-    ]);
-    followerSheet.getRange("1:1").setFontWeight("bold").setBackground("#d9ead3");
-  }
+  const sheets = [
+    { name: CONFIG.SHEET_NAME.FOLLOWERS, head: ['User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 'First Follow Date', 'Last Follow Date', 'Follow Count', 'Status', 'Source Channel', 'Tags', 'Last Interaction', 'Total Messages'], color: "#d9ead3" },
+    { name: CONFIG.SHEET_NAME.CONVERSATIONS, head: ['Timestamp', 'User ID', 'Display Name', 'User Message', 'Bot Reply', 'Intent'], color: "#cfe2f3" },
+    { name: CONFIG.SHEET_NAME.MEMBERS, head: ['Customer ID', 'Pet Type', 'Pet Name', 'Level', 'Total Spending', 'Tokens', 'Tier'], color: "#fff2cc" }
+  ];
 
-  // 2. สร้าง/ตรวจสอบ Sheet Conversations
-  let convSheet = ss.getSheetByName(CONFIG.SHEET_NAME.CONVERSATIONS);
-  if (!convSheet) {
-    convSheet = ss.insertSheet(CONFIG.SHEET_NAME.CONVERSATIONS);
-    convSheet.appendRow(['Timestamp', 'User ID', 'Display Name', 'User Message', 'Bot Reply', 'Intent']);
-    convSheet.getRange("1:1").setFontWeight("bold").setBackground("#cfe2f3");
-  }
-
-  // 3. สร้าง/ตรวจสอบ Sheet Members (Tamagotchi)
-  let memberSheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-  if (!memberSheet) {
-    memberSheet = ss.insertSheet(CONFIG.SHEET_NAME.MEMBERS);
-    memberSheet.appendRow(['Customer ID', 'Pet Type', 'Pet Name', 'Level', 'Total Spending', 'Tokens', 'Tier']);
-    memberSheet.getRange("1:1").setFontWeight("bold").setBackground("#fff2cc");
-  }
-  
+  sheets.forEach(s => {
+    let sheet = ss.getSheetByName(s.name);
+    if (!sheet) {
+      sheet = ss.insertSheet(s.name);
+      sheet.appendRow(s.head);
+      sheet.getRange("1:1").setFontWeight("bold").setBackground(s.color);
+    }
+  });
   console.log("✅ Database Setup Completed!");
 }
 
@@ -46,12 +32,8 @@ function upsertFollower(data) {
   const values = sheet.getDataRange().getValues();
   let rowIndex = -1;
 
-  // ค้นหา User เดิม
   for (let i = 1; i < values.length; i++) {
-    if (values[i][0] === data.userId) {
-      rowIndex = i + 1;
-      break;
-    }
+    if (values[i][0] === data.userId) { rowIndex = i + 1; break; }
   }
 
   const rowData = [
@@ -64,6 +46,33 @@ function upsertFollower(data) {
     sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
+  }
+}
+
+function updateFollowerInteraction(userId, profile = null) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === userId) {
+      const rowIndex = i + 1;
+      
+      // 1. อัปเดต Last Interaction (L) และ Total Messages (M)
+      sheet.getRange(rowIndex, 12).setValue(new Date());
+      const currentMessages = Number(data[i][12]) || 0;
+      sheet.getRange(rowIndex, 13).setValue(currentMessages + 1);
+      
+      // 2. 🛠️ ซ่อมข้อมูล: หากคอลัมน์ B, C, D ว่างเปล่า ให้เติมจาก Profile
+      if (profile) {
+        if (!data[i][1]) sheet.getRange(rowIndex, 2).setValue(profile.displayName);
+        if (!data[i][2]) sheet.getRange(rowIndex, 3).setValue(profile.pictureUrl);
+        if (!data[i][3]) sheet.getRange(rowIndex, 4).setValue(profile.language || 'th');
+      }
+      
+      SpreadsheetApp.flush();
+      return;
+    }
   }
 }
 
