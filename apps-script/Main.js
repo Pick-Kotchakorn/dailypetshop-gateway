@@ -1,20 +1,19 @@
-// ไฟล์ Main.gs
+// ========================================
+// 🚀 MAIN.GS - ENTRY POINT (Full Version)
+// ========================================
 
 /**
- * GET Request: สำหรับแสดงหน้าจอเกม Tamagotchi (Web App)
- * ดึง Logic จากการจัดการหน้าจอของ unabot-gateway
+ * GET Request: สำหรับแสดงหน้าจอสมาชิก (Web App)
+ * URL นี้จะถูกนำไปใส่ใน Rich Menu ของ LINE
  */
 function doGet(e) {
   try {
-    // รับ userId จาก URL parameter (เช่น ?userId=U123456)
-    // หากไม่มีให้ใช้ค่าว่าง เพื่อไปรอรับการระบุตัวตนในหน้า Index
     const userId = e.parameter.userId || "";
-    
     const template = HtmlService.createTemplateFromFile('Index');
     template.userId = userId;
     
     return template.evaluate()
-      .setTitle('Petshop Tamagotchi')
+      .setTitle('Daily Pet Shop - Member')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   } catch (error) {
@@ -23,37 +22,30 @@ function doGet(e) {
 }
 
 /**
- * POST Request: จุดรับ Webhook จาก Cloudflare / LINE
- * เลียนแบบโครงสร้างจาก Main.js ใน unabot-gateway
+ * POST Request: รับข้อมูลจาก Cloudflare Gateway / LINE Webhook
  */
 function doPost(e) {
   try {
-    // 1. ตรวจสอบข้อมูลที่ส่งมา
     if (!e.postData || !e.postData.contents) {
-      return makeJsonResponse({ status: 'error', message: 'No post data' });
+      return createJsonResponse({ status: 'ok', message: 'No data' });
     }
 
-    const contents = JSON.parse(e.postData.contents);
-    const events = contents.events;
+    const body = JSON.parse(e.postData.contents);
+    const events = body.events || [];
 
-    // 2. วนลูปจัดการแต่ละ Event (เช่น Follow หรือ Message)
+    // จัดการแต่ละ Event (เรียกใช้จาก EventHandler.gs)
     events.forEach(event => {
-      // ส่งต่อไปยัง EventHandler.gs เพื่อแยกแยะการทำงาน
       handleEvent(event); 
     });
 
-    return makeJsonResponse({ status: 'ok' });
-
+    return createJsonResponse({ status: 'ok' });
   } catch (error) {
-    console.error("❌ Critical Error in doPost:", error);
-    return makeJsonResponse({ status: 'error', message: error.message });
+    console.error("❌ Error in doPost:", error);
+    return createJsonResponse({ status: 'error', message: error.message });
   }
 }
 
-/**
- * ฟังก์ชันช่วยสร้าง Response แบบ JSON
- */
-function makeJsonResponse(data) {
+function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }

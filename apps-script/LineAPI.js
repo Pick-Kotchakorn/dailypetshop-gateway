@@ -1,37 +1,66 @@
-const LINE_ACCESS_TOKEN = "CZz0R1xNLrIT+B4PHh2O5JSHGhLkvFZNhL61lPtQd9U/EwJqdQnEeahdiZHmjto8S/Wl5KGBnl+blF3aV6A8PtFkf7AvjEr1ESLUU9YvalGLaR6ZPBlIYFyxmWwC51Kp4+GVIxHT4gr+rdYf6kYG3AdB04t89/1O/w1cDnyilFU=";
+// ========================================
+// 📱 LINEAPI.GS - LINE CONNECTOR (Full Version)
+// ========================================
 
 /**
- * ส่งข้อความตอบกลับ (Reply)
+ * แสดงสถานะ "บอทกำลังพิมพ์" (Loading Animation)
  */
-function replyMessage(replyToken, text) {
-  const url = "https://api.line.me/v2/bot/message/reply";
-  const options = {
-    "method": "post",
-    "headers": {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + LINE_ACCESS_TOKEN
-    },
-    "payload": JSON.stringify({
-      "replyToken": replyToken,
-      "messages": [{ "type": "text", "text": text }]
-    })
-  };
-  UrlFetchApp.fetch(url, options);
+function sendLoadingAnimation(userId) {
+  try {
+    const url = "https://api.line.me/v2/bot/chat/loading/start";
+    const payload = {
+      chatId: userId,
+      loadingSeconds: 5
+    };
+    const options = {
+      "method": "post",
+      "contentType": "application/json",
+      "headers": { "Authorization": "Bearer " + CONFIG.LINE_TOKEN },
+      "payload": JSON.stringify(payload),
+      "muteHttpExceptions": true
+    };
+    UrlFetchApp.fetch(url, options);
+  } catch (e) {
+    Logger.log('⚠️ Loading Animation Error: ' + e.message);
+  }
 }
 
 /**
- * ดึงข้อมูลโปรไฟล์ผู้ใช้จาก LINE
+ * ส่งข้อความตอบกลับ (Reply Message)
+ */
+function replyMessage(replyToken, messages) {
+  try {
+    const url = "https://api.line.me/v2/bot/message/reply";
+    const payload = {
+      "replyToken": replyToken,
+      "messages": Array.isArray(messages) ? messages : [{ "type": "text", "text": messages }]
+    };
+    const options = {
+      "method": "post",
+      "contentType": "application/json",
+      "headers": { "Authorization": "Bearer " + CONFIG.LINE_TOKEN },
+      "payload": JSON.stringify(payload)
+    };
+    UrlFetchApp.fetch(url, options);
+  } catch (e) {
+    Logger.log('❌ replyMessage Error: ' + e.message);
+  }
+}
+
+/**
+ * ดึงโปรไฟล์จาก LINE API
  */
 function getUserProfile(userId) {
-  const url = "https://api.line.me/v2/bot/profile/" + userId;
-  const options = {
-    "method": "get",
-    "headers": { "Authorization": "Bearer " + LINE_ACCESS_TOKEN }
-  };
   try {
+    const url = "https://api.line.me/v2/bot/profile/" + userId;
+    const options = {
+      "method": "get",
+      "headers": { "Authorization": "Bearer " + CONFIG.LINE_TOKEN }
+    };
     const response = UrlFetchApp.fetch(url, options);
     return JSON.parse(response.getContentText());
   } catch (e) {
-    return { displayName: 'Unknown' };
+    Logger.log('❌ getUserProfile Error: ' + e.message);
+    return { displayName: 'Customer' };
   }
 }
