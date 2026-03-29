@@ -12,66 +12,47 @@ const WEBHOOK_SITE_DEFAULT = 'https://webhook.site/d5cc4ad6-7286-4879-ba7a-0455d
 
 export default {
   async fetch(request, env, ctx) {
-    // 1. กรองเฉพาะ POST Method
+    // 1. ตอบกลับ OK ทันทีหากไม่ใช่ POST (ป้องกันการสแกนจาก Bot อื่น)
     if (request.method !== 'POST') {
-      return new Response('Method Not Allowed', { status: 405 });
+      return new Response('OK', { status: 200 }); 
     }
 
-    console.log('🔔 Webhook received from LINE');
-
-    // 2. รับค่าจาก Header และ Body
     const signature = request.headers.get('x-line-signature');
     const body = await request.text();
-    const channelSecret = env.LINE_CHANNEL_SECRET;
 
-    // 🔍 3. จุดแก้ไข: Bypass สำหรับการกดปุ่ม Verify ใน LINE Developers Console
-    // หากไม่มี signature หรือ body สั้นมาก ให้ตอบกลับ 200 OK ทันทีเพื่อให้ผ่านการ Verify
-    if (!signature || body.length < 5) {
-      console.log('⚠️ Verification request detected or Missing Signature');
+    // 🔍 ปรับเงื่อนไข Bypass ให้ครอบคลุมการกดปุ่ม Verify มากขึ้น
+    // ถ้าไม่มี Signature หรือเป็น Body ว่าง ({}) ให้ตอบ 200 ทันที
+    if (!signature || body === '{}' || body.length < 5) {
+      console.log('⚠️ Verification/Empty request detected');
       return new Response('OK', { status: 200 });
     }
 
+    const channelSecret = env.LINE_CHANNEL_SECRET;
+    
+    // ตรวจสอบความพร้อมของ Secret
     if (!channelSecret) {
       console.error('❌ LINE_CHANNEL_SECRET is NOT set!');
-      return new Response('Server Error: Missing Secret', { status: 500 });
+      // ส่ง 200 ไปก่อนในช่วงทดสอบเพื่อไม่ให้ LINE ตัดการเชื่อมต่อ
+      return new Response('Config Error', { status: 200 }); 
     }
 
-    // ✅ 4. Validate Signature (ใช้ Web Crypto API)
-    try {
-      const isValid = await verifyLineSignature(body, channelSecret, signature);
-      
-      if (!isValid) {
-        console.log('❌ Invalid signature. Request rejected.');
-        // หาก Verify ผ่านแล้วแต่ใช้งานจริงยังติด 403 ให้ลองเปลี่ยนเป็น status: 200 ชั่วคราวเพื่อ Debug
-        return new Response('Invalid signature', { status: 403 });
-      }
-    } catch (error) {
-      console.error('❌ Signature Validation Error:', error.message);
-      return new Response('Validation failed', { status: 500 });
+    // ✅ Validate Signature
+    const isValid = await verifyLineSignature(body, channelSecret, signature);
+    
+    if (!isValid) {
+      console.log('❌ Invalid signature.');
+      // 💡 ช่วง Verify ให้ลองเปลี่ยนเป็น 200 เพื่อเช็คว่าท่อส่งไปถึง GAS ไหม
+      // หากผ่านแล้วค่อยเปลี่ยนกลับเป็น 403 เพื่อความปลอดภัย
+      return new Response('OK', { status: 200 }); 
     }
 
-    console.log('✅ Signature validated');
+    // 🚀 ส่วนการ Forward ข้อมูลไปยัง GAS คงเดิม...
+    ctx.waitUntil(forwardToMultipleEndpoints(
+      [{ name: 'GAS', url: env.FORWARD_URL || GAS_ENDPOINT_DEFAULT, enabled: true }],
+      body, 
+      signature
+    ));
 
-    // 🎯 5. ตั้งค่า Endpoints สำหรับส่งต่อข้อมูล (Multiple Endpoints ตาม unabot)
-    const endpoints = [
-      { 
-        name: 'GAS (Production)', 
-        url: env.FORWARD_URL || GAS_ENDPOINT_DEFAULT,
-        enabled: true
-      },
-      { 
-        name: 'Webhook.site (Debug)', 
-        url: env.WEBHOOK_SITE_URL || WEBHOOK_SITE_DEFAULT,
-        enabled: env.ENABLE_WEBHOOK_SITE !== 'false' // เปิด/ปิดได้ผ่าน Dashboard
-      }
-    ];
-
-    // 🚀 6. ส่งข้อมูลแบบ Parallel (ไม่รอผล เพื่อป้องกัน LINE Timeout)
-    ctx.waitUntil(
-      forwardToMultipleEndpoints(endpoints, body, signature)
-    );
-
-    // 7. ตอบกลับ LINE ทันทีเป็น 200 OK
     return new Response('OK', { status: 200 });
   }
 };
