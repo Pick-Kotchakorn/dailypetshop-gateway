@@ -8,20 +8,16 @@
 function sendLoadingAnimation(userId) {
   try {
     const url = "https://api.line.me/v2/bot/chat/loading/start";
-    const payload = {
-      chatId: userId,
-      loadingSeconds: 5
-    };
     const options = {
       "method": "post",
       "contentType": "application/json",
-      "headers": { "Authorization": "Bearer " + CONFIG.LINE_TOKEN },
-      "payload": JSON.stringify(payload),
+      "headers": { "Authorization": "Bearer " + CONFIG.LINE_ACCESS_TOKEN },
+      "payload": JSON.stringify({ "chatId": userId, "loadingSeconds": 5 }),
       "muteHttpExceptions": true
     };
     UrlFetchApp.fetch(url, options);
   } catch (e) {
-    Logger.log('⚠️ Loading Animation Error: ' + e.message);
+    console.error("Loading Animation Error: " + e.message);
   }
 }
 
@@ -29,22 +25,18 @@ function sendLoadingAnimation(userId) {
  * ส่งข้อความตอบกลับ (Reply Message)
  */
 function replyMessage(replyToken, messages) {
-  try {
-    const url = "https://api.line.me/v2/bot/message/reply";
-    const payload = {
-      "replyToken": replyToken,
-      "messages": Array.isArray(messages) ? messages : [{ "type": "text", "text": messages }]
-    };
-    const options = {
-      "method": "post",
-      "contentType": "application/json",
-      "headers": { "Authorization": "Bearer " + CONFIG.LINE_TOKEN },
-      "payload": JSON.stringify(payload)
-    };
-    UrlFetchApp.fetch(url, options);
-  } catch (e) {
-    Logger.log('❌ replyMessage Error: ' + e.message);
-  }
+  const url = "https://api.line.me/v2/bot/message/reply";
+  const payload = {
+    "replyToken": replyToken,
+    "messages": Array.isArray(messages) ? messages : [{ "type": "text", "text": messages }]
+  };
+  const options = {
+    "method": "post",
+    "contentType": "application/json",
+    "headers": { "Authorization": "Bearer " + CONFIG.LINE_ACCESS_TOKEN },
+    "payload": JSON.stringify(payload)
+  };
+  UrlFetchApp.fetch(url, options);
 }
 
 /**

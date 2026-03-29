@@ -4,16 +4,16 @@
  * ฟังก์ชันหลักในการแยกแยะประเภทเหตุการณ์ (Event)
  */
 function handleEvent(event) {
-  const eventType = event.type;
+  const userId = event.source.userId;
   
-  switch (eventType) {
-    case 'follow':
-      return handleFollowEvent(event);
-    case 'message':
-      return handleMessageEvent(event);
-    default:
-      console.log(`Unhandled event type: ${eventType}`);
-      return null;
+  // 1. เรียก Loading ทันทีเพื่อให้ LINE แสดงสถานะ
+  sendLoadingAnimation(userId);
+
+  // 2. แยกประเภท Event
+  if (event.type === 'follow') {
+    handleFollowEvent(event);
+  } else if (event.type === 'message') {
+    handleMessageEvent(event);
   }
 }
 
@@ -61,22 +61,21 @@ function handleFollowEvent(event) {
  * จัดการเมื่อมี "ข้อความ" ส่งเข้ามา (Message Event)
  */
 function handleMessageEvent(event) {
-  if (event.message.type !== 'text') return;
-
   const userId = event.source.userId;
   const userMessage = event.message.text;
-  const profile = getUserProfile(userId);
-  
-  // ในขั้นตอนนี้เราจะบันทึก Log การสนทนาลง Sheet ก่อน
-  // ส่วนระบบโต้ตอบกับ Tamagotchi จะมาเขียนเพิ่มในภายหลัง
+
+  // บันทึก Log การสนทนา
   saveLog({
     userId: userId,
-    displayName: profile.displayName,
     userMessage: userMessage,
-    botReply: 'ได้รับข้อความแล้ว', // ข้อความสมมติ
-    intent: 'general.chat'
+    intent: "Message Received"
   });
 
-  // ตัวอย่างการอัปเดตสถานะ Interaction ล่าสุด
-  // (สามารถเขียนฟังก์ชันเพิ่มใน SheetService เพื่ออัปเดต lastInteraction และ totalMessages ได้)
+  // 💡 จุดสำคัญ: อัปเดตข้อมูลผู้ติดตาม/สมาชิกที่นี่
+  const profile = getUserProfile(userId);
+  upsertFollower({
+    userId: userId,
+    displayName: profile.displayName,
+    lastInteraction: new Date()
+  });
 }
