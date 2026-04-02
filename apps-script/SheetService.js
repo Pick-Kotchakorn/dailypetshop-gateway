@@ -9,7 +9,17 @@ function setupDatabase() {
   const sheets = [
     { name: CONFIG.SHEET_NAME.FOLLOWERS, head: ['User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 'First Follow Date', 'Last Follow Date', 'Follow Count', 'Status', 'Source Channel', 'Tags', 'Last Interaction', 'Total Messages'], color: "#d9ead3" },
     { name: CONFIG.SHEET_NAME.CONVERSATIONS, head: ['Timestamp', 'User ID', 'Display Name', 'User Message', 'Bot Reply', 'Intent'], color: "#cfe2f3" },
-    { name: CONFIG.SHEET_NAME.MEMBERS, head: ['Customer ID', 'Pet Type', 'Pet Name', 'Level', 'Total Spending', 'Tokens', 'Tier'], color: "#fff2cc" }
+    // 🎯 อัปเดตหัวตาราง MEMBERS ให้ครบตามความต้องการ Admin Panel
+    { 
+      name: CONFIG.SHEET_NAME.MEMBERS, 
+      head: [
+        'Customer ID', 'Remark', 'Available Coupon', 'Current Points', 'Expiring Points', 
+        'Member Since', 'Member Until', 'Added From', 'Last Access', 'Total Visits', 
+        'Lifetime Points', 'Total Spending', 'Avg Spending', 'Balance (เงิน)',
+        'Full Name', 'LINE Name', 'Username', 'Gender', 'Email', 'Tel', 'Birthday', 'Address', 'Level', 'Plastic Card', 'Referrer'
+      ], 
+      color: "#fff2cc" 
+    }
   ];
 
   sheets.forEach(s => {
@@ -17,10 +27,9 @@ function setupDatabase() {
     if (!sheet) {
       sheet = ss.insertSheet(s.name);
       sheet.appendRow(s.head);
-      sheet.getRange("1:1").setFontWeight("bold").setBackground(s.color);
+      sheet.getRange("1:1").setFontWeight("bold").setBackground(s.color).setWrap(true);
     }
   });
-  console.log("✅ Database Setup Completed!");
 }
 
 /**

@@ -7,7 +7,7 @@
  */
 
 // 📌 ปักหมุด URL ปลายทาง
-const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwbrYbJe03nd58Bm-4Y2ixWNpIWeQ4Dxsh52W19QOYJgi1BXOyC-xsx_uMuKdbfUe0XeQ/exec';
+const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbz_kElS6ZfO9CazuBHPL5jz6F_TZMHagzFVoRybcgfh-qgqkdDaIDs-9alUE0-oUKNm/exec';
 const WEBHOOK_SITE_URL = 'https://webhook.site/d5cc4ad6-7286-4879-ba7a-0455d0a53d2b';
 
 export default {

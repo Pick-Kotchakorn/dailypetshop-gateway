@@ -4,14 +4,16 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Daily Pet Shop - Tamagotchi</title>
+  <title>Daily Pet Shop - Member Card</title>
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary-bg: #F2E8D5; /* สีพื้นหลังพาสเทล */
-      --card-bg: #EBD6A7;    /* สีการ์ดใบบัก */
+      --primary-bg: #F2E8D5; 
+      --card-bg: #EBD6A7;    
       --text-color: #4A3F35;
       --accent-color: #FFD24D;
+      --success-color: #5D9C59;
+      --white: #ffffff;
     }
 
     body {
@@ -19,6 +21,7 @@
       background-color: var(--primary-bg);
       color: var(--text-color);
       margin: 0;
+      padding: 15px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -29,7 +32,7 @@
     .header {
       width: 100%;
       text-align: center;
-      padding: 20px 0;
+      margin-bottom: 15px;
     }
 
     .level-badge {
@@ -37,161 +40,313 @@
       padding: 5px 20px;
       border-radius: 20px;
       font-weight: bold;
-      border: 2px solid var(--text-color);
       display: inline-block;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
 
-    /* 👾 Pet Stage */
-    .pet-stage {
-      width: 300px;
-      height: 200px;
-      background: url('https://i.imgur.com/your-background-sea.png') no-repeat center; /* ใส่รูปพื้นหลังน้ำทะเล */
-      background-size: contain;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      position: relative;
-    }
-
-    #pet-character {
-      width: 150px;
-      transition: transform 0.3s ease;
-    }
-
-    /* 🥬 XP Grid (ช่องใบบัก) */
-    .xp-card {
-      background-color: var(--card-bg);
-      width: 90%;
+    /* 🪪 Member Card */
+    .member-card {
+      background: var(--card-bg);
+      width: 100%;
       max-width: 350px;
       border-radius: 25px;
       padding: 20px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      border: 2px solid #D4B982;
+      box-shadow: 0 8px 20px rgba(74, 63, 53, 0.2);
+      position: relative;
+      overflow: hidden;
     }
 
-    .xp-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-
-    .xp-slot {
-      width: 45px;
-      height: 45px;
-      border: 2px dashed #9E8C6B;
-      border-radius: 50%;
+    .profile-section {
       display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .avatar-ring {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: 3px solid var(--white);
+      overflow: hidden;
+      background: #eee;
+    }
+
+    .avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
+
+    .user-info h2 { margin: 0; font-size: 1.2em; }
+    .user-info p { margin: 0; font-size: 0.85em; opacity: 0.8; }
+
+    /* 📊 Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      background: rgba(255, 255, 255, 0.4);
+      padding: 10px;
+      border-radius: 15px;
+      text-align: center;
+    }
+
+    .stat-label { font-size: 0.75em; display: block; }
+    .stat-value { font-size: 1.1em; font-weight: bold; color: #8B5E3C; }
+
+    /* 📋 Detailed Info Container */
+    .info-container {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 15px;
+      width: 100%;
+      max-width: 350px;
+      margin-top: 15px;
+      box-sizing: border-box;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px dashed #eee;
+      font-size: 0.9em;
+    }
+
+    .info-row:last-child { border-bottom: none; }
+    .label { color: #888; }
+    .value { font-weight: 500; text-align: right; }
+
+    /* 🐾 XP Bar */
+    .xp-section { width: 100%; margin-top: 10px; }
+    .xp-title { font-size: 0.8em; margin-bottom: 5px; display: flex; justify-content: space-between; }
+    .xp-container {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+    }
+    .xp-slot {
+      width: 18px;
+      height: 18px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .xp-slot.filled { background: var(--success-color); }
+    .leaf-icon { width: 12px; opacity: 0.3; }
+    .filled .leaf-icon { opacity: 1; filter: brightness(0) invert(1); }
+
+    /* 🎮 Pet Character */
+    .pet-display {
+      margin: 20px 0;
+      text-align: center;
+    }
+    #pet-character {
+      width: 120px;
+      filter: drop-shadow(0 5px 10px rgba(0,0,0,0.1));
+      transition: transform 0.3s;
+    }
+    #pet-character:active { transform: scale(1.1); }
+
+    /* 🔘 Buttons */
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 350px;
+      margin-top: 20px;
+    }
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 15px;
+      font-family: 'Kanit';
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-feed { background: #E67E22; color: white; }
+    .btn-feed:disabled { background: #ccc; }
+
+    /* ⏳ Loading Screen */
+    #loading-screen {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: var(--primary-bg);
+      display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      opacity: 0.3;
-    }
-
-    .xp-slot.filled {
-      opacity: 1;
-      border-style: solid;
-      background: rgba(255,255,255,0.3);
-    }
-
-    .leaf-icon {
-      width: 30px;
-    }
-
-    /* 📊 Info Section */
-    .info-text {
-      text-align: center;
-      font-size: 0.9em;
-      line-height: 1.5;
-    }
-
-    .point-badge {
-      font-weight: bold;
-      color: #D35400;
-    }
-
-    /* 🔘 Action Button */
-    .btn-feed {
-      margin-top: 20px;
-      background: #5D9C59;
-      color: white;
-      border: none;
-      padding: 12px 40px;
-      border-radius: 30px;
-      font-size: 1.1em;
-      cursor: pointer;
-      box-shadow: 0 4px #3E693B;
-    }
-
-    .btn-feed:active {
-      transform: translateY(2px);
-      box-shadow: 0 2px #3E693B;
+      z-index: 9999;
     }
   </style>
 </head>
 <body>
 
+  <div id="loading-screen">
+    <img src="https://cdn-icons-png.flaticon.com/512/616/616408.png" width="80" class="loading-icon">
+    <p>กำลังดึงข้อมูลสมาชิก...</p>
+  </div>
+
   <div class="header">
-    <h2 id="pet-name">Daily Pet</h2>
-    <div class="level-badge">Level <span id="lvl-val">1</span></div>
+    <div class="level-badge" id="tier-badge">...</div>
   </div>
 
-  <div class="pet-stage">
-    <img id="pet-character" src="https://cdn-icons-png.flaticon.com/512/2271/2271062.png" alt="Pet">
-  </div>
-
-  <div class="xp-card">
-    <div class="xp-grid" id="xp-container">
+  <div class="member-card">
+    <div class="profile-section">
+      <div class="avatar-ring">
+        <img id="profile-img" src="https://via.placeholder.com/150" alt="Profile">
       </div>
-    
-    <div class="info-text">
-      Every 50 baht Get <span class="point-badge">🪙 1 point</span> and 🌿 1 XP<br>
-      <small>สะสม 15 XP เพื่ออัปเลเวลถัดไป!</small>
+      <div class="user-info">
+        <h2 id="display-name">Loading...</h2>
+        <p id="membership-id">Member ID: -</p>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box">
+        <span class="stat-label">ยอดสะสม</span>
+        <span class="stat-value">฿<span id="total-spending">0</span></span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-label">แต้มปัจจุบัน</span>
+        <span class="stat-value"><span id="current-points">0</span> 🐾</span>
+      </div>
+    </div>
+
+    <div class="xp-section">
+      <div class="xp-title">
+        <span>ความสุขของน้อง</span>
+        <span id="xp-text">0 / 15</span>
+      </div>
+      <div class="xp-container" id="xp-container">
+        </div>
     </div>
   </div>
 
-  <button class="btn-feed" onclick="handleFeed()">ให้อาหาร (ใช้ 5 Points)</button>
+  <div class="info-container">
+    <div class="info-row">
+      <span class="label">ชื่อ-นามสกุล</span>
+      <span class="value" id="info-fullname">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">เพศ</span>
+      <span class="value" id="info-gender">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">Username</span>
+      <span class="value" id="info-username">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">อีเมล</span>
+      <span class="value" id="info-email">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">เบอร์โทรศัพท์</span>
+      <span class="value" id="info-tel">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">วันเกิด</span>
+      <span class="value" id="info-birthday">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">ที่อยู่</span>
+      <span class="value" id="info-address">-</span>
+    </div>
+  </div>
+
+  <div class="pet-display">
+    <img id="pet-character" src="https://cdn-icons-png.flaticon.com/512/3047/3047928.png" alt="Pet">
+    <p style="font-size: 0.8em; color: #8B5E3C; margin-top: 10px;">เป็นสมาชิกมาแล้ว: <span id="member-duration">-</span></p>
+  </div>
+
+  <div class="btn-group">
+    <button class="btn btn-feed" id="feed-btn" onclick="handleFeed()">ให้อาหาร (ใช้ 5 แต้ม)</button>
+  </div>
 
   <script>
-    // ข้อมูลจำลอง (เดี๋ยวจะเชื่อมกับ Membership.gs)
-    let petData = {
-      name: "น้องนำโชค",
-      level: 1,
-      xp: 7, // จำนวนใบบักที่มี
-      points: 20
+    const USER_ID = "<?= userId ?>";
+
+    window.onload = function() {
+      if(USER_ID) {
+        loadData();
+      }
     };
 
-    function renderUI() {
-      document.getElementById('pet-name').innerText = petData.name;
-      document.getElementById('lvl-val').innerText = petData.level;
-      
-      // สร้างช่อง XP 15 ช่อง
+    function loadData() {
+      google.script.run
+        .withSuccessHandler(renderUI)
+        .withFailureHandler(err => alert("Error: " + err))
+        .getCustomerProfile(USER_ID);
+    }
+
+    function renderUI(data) {
+      document.getElementById('loading-screen').style.display = 'none';
+      if (!data) {
+        alert("ไม่พบข้อมูลสมาชิก");
+        return;
+      }
+
+      const p = data.profile;
+      const m = data.membership;
+
+      // 1. อัปเดตข้อมูลบนบัตร
+      document.getElementById('display-name').innerText = p.lineName || p.fullName;
+      document.getElementById('membership-id').innerText = "ID: " + p.username;
+      document.getElementById('tier-badge').innerText = p.level || "Newborn Pup";
+      document.getElementById('total-spending').innerText = m.totalSpending.toLocaleString();
+      document.getElementById('current-points').innerText = m.currentPoints.toLocaleString();
+      document.getElementById('member-duration').innerText = m.memberDuration;
+
+      // 2. อัปเดตตารางข้อมูลส่วนตัว
+      document.getElementById('info-fullname').innerText = p.fullName;
+      document.getElementById('info-gender').innerText = p.gender;
+      document.getElementById('info-username').innerText = p.username;
+      document.getElementById('info-email').innerText = p.email;
+      document.getElementById('info-tel').innerText = p.tel;
+      document.getElementById('info-birthday').innerText = p.birthday;
+      document.getElementById('info-address').innerText = p.address;
+
+      // 3. จัดการ XP Bar (คำนวณจากแต้มหาร 15)
+      const xpValue = m.currentPoints % 15;
+      document.getElementById('xp-text').innerText = `${xpValue} / 15`;
       const container = document.getElementById('xp-container');
       container.innerHTML = '';
       for (let i = 0; i < 15; i++) {
         const slot = document.createElement('div');
-        slot.className = `xp-slot ${i < petData.xp ? 'filled' : ''}`;
+        slot.className = `xp-slot ${i < xpValue ? 'filled' : ''}`;
         slot.innerHTML = '<img src="https://cdn-icons-png.flaticon.com/512/892/892926.png" class="leaf-icon">';
         container.appendChild(slot);
       }
 
-      // Logic เปลี่ยนร่างตัวละคร (Evolution)
+      // 4. เปลี่ยนรูปน้องตามระดับยอดใช้จ่าย
       const img = document.getElementById('pet-character');
-      if(petData.level >= 10) img.src = "https://cdn-icons-png.flaticon.com/512/1053/1053414.png"; // ตัวอย่างร่างโต
-      else if(petData.level >= 5) img.src = "https://cdn-icons-png.flaticon.com/512/3069/3069172.png";
+      if (m.totalSpending >= 2000) {
+        img.src = "https://cdn-icons-png.flaticon.com/512/1053/1053414.png"; // ร่างเทพ
+      } else if (m.totalSpending >= 1000) {
+        img.src = "https://cdn-icons-png.flaticon.com/512/3069/3069172.png"; // ร่างวัยรุ่น
+      }
+
+      // 5. ปิดปุ่มถ้าแต้มไม่พอ
+      document.getElementById('feed-btn').disabled = (m.currentPoints < 5);
     }
 
     function handleFeed() {
-      // เรียกฟังก์ชันฝั่ง Server (Membership.gs)
-      google.script.run
-        .withSuccessHandler(res => {
-          alert(res.message);
-          // โหลดข้อมูลใหม่หลังจากอัปเดต
-        })
-        .feedPet("<?= userId ?>"); 
-    }
+      const btn = document.getElementById('feed-btn');
+      btn.disabled = true;
+      btn.innerText = "กำลังประมวลผล...";
 
-    // เริ่มต้นแสดงผล
-    renderUI();
+      google.script.run
+        .withSuccessHandler(function(res) {
+          alert(res.message);
+          loadData();
+          btn.innerText = "ให้อาหาร (ใช้ 5 แต้ม)";
+        })
+        .processFeed(USER_ID);
+    }
   </script>
 </body>
 </html>
