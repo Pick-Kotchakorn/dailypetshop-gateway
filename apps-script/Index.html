@@ -5,348 +5,202 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Daily Pet Shop - Member Card</title>
-  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;500&display=swap" rel="stylesheet">
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary-bg: #F2E8D5; 
-      --card-bg: #EBD6A7;    
-      --text-color: #4A3F35;
-      --accent-color: #FFD24D;
-      --success-color: #5D9C59;
+      --dps-main: #c54327;      /* สีหลักจาก CI */
+      --dps-secondary: #f2e2c0; /* สีรองจาก CI */
+      --dps-accent: #faaf73;    /* สีส้มอ่อนจาก Palette */
+      --dps-green: #305640;     /* สีเขียวเข้มจาก Palette */
       --white: #ffffff;
+      --text-dark: #4A3F35;
     }
 
     body {
       font-family: 'Kanit', sans-serif;
-      background-color: var(--primary-bg);
-      color: var(--text-color);
+      background-color: var(--dps-secondary);
+      color: var(--text-dark);
       margin: 0;
-      padding: 15px;
+      padding: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
     }
 
-    /* 🏷️ Header Section */
-    .header {
-      width: 100%;
-      text-align: center;
-      margin-bottom: 15px;
-    }
-
-    .level-badge {
-      background: var(--accent-color);
-      padding: 5px 20px;
-      border-radius: 20px;
-      font-weight: bold;
-      display: inline-block;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-
-    /* 🪪 Member Card */
-    .member-card {
-      background: var(--card-bg);
-      width: 100%;
-      max-width: 350px;
-      border-radius: 25px;
-      padding: 20px;
-      box-shadow: 0 8px 20px rgba(74, 63, 53, 0.2);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .profile-section {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      margin-bottom: 20px;
-    }
-
-    .avatar-ring {
-      width: 70px;
-      height: 70px;
-      border-radius: 50%;
-      border: 3px solid var(--white);
-      overflow: hidden;
-      background: #eee;
-    }
-
-    .avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
-
-    .user-info h2 { margin: 0; font-size: 1.2em; }
-    .user-info p { margin: 0; font-size: 0.85em; opacity: 0.8; }
-
-    /* 📊 Stats Grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    .stat-box {
-      background: rgba(255, 255, 255, 0.4);
-      padding: 10px;
-      border-radius: 15px;
-      text-align: center;
-    }
-
-    .stat-label { font-size: 0.75em; display: block; }
-    .stat-value { font-size: 1.1em; font-weight: bold; color: #8B5E3C; }
-
-    /* 📋 Detailed Info Container */
-    .info-container {
-      background: var(--white);
-      border-radius: 20px;
-      padding: 15px;
-      width: 100%;
-      max-width: 350px;
-      margin-top: 15px;
-      box-sizing: border-box;
-    }
-
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px dashed #eee;
-      font-size: 0.9em;
-    }
-
-    .info-row:last-child { border-bottom: none; }
-    .label { color: #888; }
-    .value { font-weight: 500; text-align: right; }
-
-    /* 🐾 XP Bar */
-    .xp-section { width: 100%; margin-top: 10px; }
-    .xp-title { font-size: 0.8em; margin-bottom: 5px; display: flex; justify-content: space-between; }
-    .xp-container {
-      display: flex;
-      gap: 4px;
-      justify-content: center;
-    }
-    .xp-slot {
-      width: 18px;
-      height: 18px;
-      background: rgba(255, 255, 255, 0.3);
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .xp-slot.filled { background: var(--success-color); }
-    .leaf-icon { width: 12px; opacity: 0.3; }
-    .filled .leaf-icon { opacity: 1; filter: brightness(0) invert(1); }
-
-    /* 🎮 Pet Character */
-    .pet-display {
-      margin: 20px 0;
-      text-align: center;
-    }
-    #pet-character {
-      width: 120px;
-      filter: drop-shadow(0 5px 10px rgba(0,0,0,0.1));
-      transition: transform 0.3s;
-    }
-    #pet-character:active { transform: scale(1.1); }
-
-    /* 🔘 Buttons */
-    .btn-group {
-      display: flex;
-      gap: 10px;
-      width: 100%;
-      max-width: 350px;
+    /* 🏷️ Header Card Section */
+    .header-card {
+      background: var(--dps-main);
+      width: 90%;
+      max-width: 400px;
+      border-radius: 20px 20px 0 0;
+      padding: 25px 20px;
       margin-top: 20px;
+      color: white;
+      box-shadow: 0 4px 15px rgba(197, 67, 39, 0.2);
+      position: relative;
     }
-    .btn {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      border-radius: 15px;
-      font-family: 'Kanit';
-      font-weight: bold;
-      cursor: pointer;
-    }
-    .btn-feed { background: #E67E22; color: white; }
-    .btn-feed:disabled { background: #ccc; }
 
-    /* ⏳ Loading Screen */
+    .level-info { display: flex; justify-content: space-between; align-items: center; }
+    .level-name { font-size: 1.5rem; font-weight: 600; letter-spacing: 1px; }
+    .benefit-link { font-size: 0.8rem; text-decoration: none; color: white; opacity: 0.9; }
+
+    .progress-container { background: rgba(255,255,255,0.2); height: 10px; border-radius: 5px; margin: 15px 0 10px 0; }
+    .progress-bar { background: var(--dps-accent); height: 100%; border-radius: 5px; transition: width 1s ease-in-out; }
+
+    /* 🪪 Main Body Container */
+    .main-container {
+      background: var(--white);
+      width: 90%;
+      max-width: 400px;
+      border-radius: 0 0 20px 20px;
+      padding: 30px 20px;
+      box-sizing: border-box;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+      text-align: center;
+    }
+
+    .qr-box img { 
+      width: 160px; 
+      padding: 10px; 
+      border: 1px solid #eee; 
+      border-radius: 15px; 
+      margin-bottom: 15px; 
+    }
+    
+    .user-name { font-size: 1.3rem; font-weight: 600; color: var(--dps-main); margin: 5px 0; }
+    .member-id { font-size: 0.9rem; color: #888; margin-bottom: 25px; }
+
+    .points-section { 
+      background-color: #fff9f5; 
+      border-radius: 15px; 
+      padding: 20px; 
+      border: 1px dashed var(--dps-accent); 
+    }
+    .points-value { font-size: 2.5rem; font-weight: 700; color: var(--dps-main); line-height: 1; }
+    .points-label { font-size: 1rem; color: var(--text-dark); }
+    .points-expiring { font-size: 0.85rem; color: #888; margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px; }
+
+    /* 🎫 Tab & Coupon */
+    .tab-menu { display: flex; width: 90%; max-width: 400px; margin-top: 25px; gap: 10px; }
+    .tab-item { 
+      flex: 1; text-align: center; padding: 12px; font-weight: 500; 
+      border-radius: 10px 10px 0 0; background: rgba(255,255,255,0.5); color: #888; 
+    }
+    .tab-item.active { background: var(--white); color: var(--dps-main); border-bottom: 3px solid var(--dps-main); }
+
+    /* ⏳ Loading */
     #loading-screen {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: var(--primary-bg);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: var(--dps-secondary); display: flex; flex-direction: column;
+      justify-content: center; align-items: center; z-index: 9999;
     }
   </style>
 </head>
 <body>
 
   <div id="loading-screen">
-    <img src="https://cdn-icons-png.flaticon.com/512/616/616408.png" width="80" class="loading-icon">
-    <p>กำลังดึงข้อมูลสมาชิก...</p>
+    <img src="https://cdn-icons-png.flaticon.com/512/616/616408.png" width="80" style="filter: hue-rotate(330deg);">
+    <p style="color: var(--dps-main); font-weight: 500;">🐾 กำลังดึงข้อมูลสมาชิก...</p>
   </div>
 
-  <div class="header">
-    <div class="level-badge" id="tier-badge">...</div>
+  <div class="header-card">
+    <div class="level-info">
+      <span class="level-name" id="display-level">Loading...</span>
+      <span class="benefit-link">สิทธิประโยชน์ ></span>
+    </div>
+    <div class="progress-container">
+      <div class="progress-bar" id="level-progress" style="width: 0%"></div>
+    </div>
+    <div id="next-level-text" style="font-size: 0.75rem; opacity: 0.9;">สะสมยอดซื้อเพื่อปรับระดับ</div>
   </div>
 
-  <div class="member-card">
-    <div class="profile-section">
-      <div class="avatar-ring">
-        <img id="profile-img" src="https://via.placeholder.com/150" alt="Profile">
-      </div>
-      <div class="user-info">
-        <h2 id="display-name">Loading...</h2>
-        <p id="membership-id">Member ID: -</p>
-      </div>
+  <div class="main-container">
+    <div class="qr-box">
+      <img id="member-qr" src="" alt="Member QR">
     </div>
+    <div class="user-name" id="display-name">...</div>
+    <div class="member-id">ID: <span id="display-id">...</span></div>
 
-    <div class="stats-grid">
-      <div class="stat-box">
-        <span class="stat-label">ยอดสะสม</span>
-        <span class="stat-value">฿<span id="total-spending">0</span></span>
-      </div>
-      <div class="stat-box">
-        <span class="stat-label">แต้มปัจจุบัน</span>
-        <span class="stat-value"><span id="current-points">0</span> 🐾</span>
-      </div>
-    </div>
-
-    <div class="xp-section">
-      <div class="xp-title">
-        <span>ความสุขของน้อง</span>
-        <span id="xp-text">0 / 15</span>
-      </div>
-      <div class="xp-container" id="xp-container">
-        </div>
+    <div class="points-section">
+      <div class="points-value" id="display-points">0</div>
+      <div class="points-label">คะแนนสะสม</div>
+      <div class="points-expiring" id="display-expiring">ไม่มีคะแนนหมดอายุ</div>
     </div>
   </div>
 
-  <div class="info-container">
-    <div class="info-row">
-      <span class="label">ชื่อ-นามสกุล</span>
-      <span class="value" id="info-fullname">-</span>
-    </div>
-    <div class="info-row">
-      <span class="label">เพศ</span>
-      <span class="value" id="info-gender">-</span>
-    </div>
-    <div class="info-row">
-      <span class="label">Username</span>
-      <span class="value" id="info-username">-</span>
-    </div>
-    <div class="info-row">
-      <span class="label">อีเมล</span>
-      <span class="value" id="info-email">-</span>
-    </div>
-    <div class="info-row">
-      <span class="label">เบอร์โทรศัพท์</span>
-      <span class="value" id="info-tel">-</span>
-    </div>
-    <div class="info-row">
-      <span class="label">วันเกิด</span>
-      <span class="value" id="info-birthday">-</span>
-    </div>
-    <div class="info-row">
-      <span class="label">ที่อยู่</span>
-      <span class="value" id="info-address">-</span>
-    </div>
-  </div>
-
-  <div class="pet-display">
-    <img id="pet-character" src="https://cdn-icons-png.flaticon.com/512/3047/3047928.png" alt="Pet">
-    <p style="font-size: 0.8em; color: #8B5E3C; margin-top: 10px;">เป็นสมาชิกมาแล้ว: <span id="member-duration">-</span></p>
-  </div>
-
-  <div class="btn-group">
-    <button class="btn btn-feed" id="feed-btn" onclick="handleFeed()">ให้อาหาร (ใช้ 5 แต้ม)</button>
+  <div class="tab-menu">
+    <div class="tab-item active">คูปองของฉัน</div>
+    <div class="tab-item">แลกแต้ม</div>
   </div>
 
   <script>
-    const USER_ID = "<?= userId ?>";
+    // 2. ฟังก์ชันหลักสำหรับ LIFF
+    async function main() {
+      try {
+        // เปลี่ยน LIFF ID ให้ตรงกับหน้า Console ของคุณ
+        await liff.init({ liffId: "2009630242-iPO8WjV7" });
 
-    window.onload = function() {
-      if(USER_ID) {
-        loadData();
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+
+        const profile = await liff.getProfile();
+        loadData(profile.userId);
+      } catch (err) {
+        console.error("LIFF Init Error", err);
+        document.getElementById('loading-screen').innerHTML = "<p>❌ ไม่สามารถเชื่อมต่อ LINE ได้</p>";
       }
-    };
+    }
 
-    function loadData() {
+    function loadData(userId) {
       google.script.run
-        .withSuccessHandler(renderUI)
-        .withFailureHandler(err => alert("Error: " + err))
-        .getCustomerProfile(USER_ID);
+        .withSuccessHandler(function(data) {
+          if (!data) {
+            // 3. ถ้าไม่พบข้อมูลสมาชิก ให้ Redirect ไปหน้าสมัคร
+            window.location.href = "<?= ScriptApp.getService().getUrl() ?>?userId=" + userId;
+            return;
+          }
+          renderUI(data);
+        })
+        .withFailureHandler(err => {
+          document.getElementById('loading-screen').innerHTML = "<p>❌ เกิดข้อผิดพลาด กรุณาลองใหม่</p>";
+        })
+        .getCustomerProfile(userId);
     }
 
     function renderUI(data) {
       document.getElementById('loading-screen').style.display = 'none';
-      if (!data) {
-        alert("ไม่พบข้อมูลสมาชิก");
-        return;
+      
+      document.getElementById('display-name').innerText = data.name;
+      document.getElementById('display-id').innerText = data.memberId;
+      document.getElementById('display-level').innerText = data.level;
+      document.getElementById('display-points').innerText = data.points.toLocaleString();
+      
+      document.getElementById('member-qr').src = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${data.memberId}&choe=UTF-8`;
+
+      if(data.pointsExpiring > 0) {
+        document.getElementById('display-expiring').innerText = 
+          `${data.pointsExpiring} คะแนนจะหมดอายุในวันที่ ${data.expiringDate}`;
       }
 
-      const p = data.profile;
-      const m = data.membership;
-
-      // 1. อัปเดตข้อมูลบนบัตร
-      document.getElementById('display-name').innerText = p.lineName || p.fullName;
-      document.getElementById('membership-id').innerText = "ID: " + p.username;
-      document.getElementById('tier-badge').innerText = p.level || "Newborn Pup";
-      document.getElementById('total-spending').innerText = m.totalSpending.toLocaleString();
-      document.getElementById('current-points').innerText = m.currentPoints.toLocaleString();
-      document.getElementById('member-duration').innerText = m.memberDuration;
-
-      // 2. อัปเดตตารางข้อมูลส่วนตัว
-      document.getElementById('info-fullname').innerText = p.fullName;
-      document.getElementById('info-gender').innerText = p.gender;
-      document.getElementById('info-username').innerText = p.username;
-      document.getElementById('info-email').innerText = p.email;
-      document.getElementById('info-tel').innerText = p.tel;
-      document.getElementById('info-birthday').innerText = p.birthday;
-      document.getElementById('info-address').innerText = p.address;
-
-      // 3. จัดการ XP Bar (คำนวณจากแต้มหาร 15)
-      const xpValue = m.currentPoints % 15;
-      document.getElementById('xp-text').innerText = `${xpValue} / 15`;
-      const container = document.getElementById('xp-container');
-      container.innerHTML = '';
-      for (let i = 0; i < 15; i++) {
-        const slot = document.createElement('div');
-        slot.className = `xp-slot ${i < xpValue ? 'filled' : ''}`;
-        slot.innerHTML = '<img src="https://cdn-icons-png.flaticon.com/512/892/892926.png" class="leaf-icon">';
-        container.appendChild(slot);
+      const spending = data.totalSpending || 0;
+      const target = 5000;
+      const progress = Math.min((spending / target) * 100, 100);
+      document.getElementById('level-progress').style.width = progress + "%";
+      
+      if (spending < target) {
+        document.getElementById('next-level-text').innerText = 
+          `สะสมอีก ${(target - spending).toLocaleString()} บาท เพื่อระดับถัดไป`;
+      } else {
+        document.getElementById('next-level-text').innerText = `คุณคือสมาชิกระดับสูงสุด 🎉`;
       }
-
-      // 4. เปลี่ยนรูปน้องตามระดับยอดใช้จ่าย
-      const img = document.getElementById('pet-character');
-      if (m.totalSpending >= 2000) {
-        img.src = "https://cdn-icons-png.flaticon.com/512/1053/1053414.png"; // ร่างเทพ
-      } else if (m.totalSpending >= 1000) {
-        img.src = "https://cdn-icons-png.flaticon.com/512/3069/3069172.png"; // ร่างวัยรุ่น
-      }
-
-      // 5. ปิดปุ่มถ้าแต้มไม่พอ
-      document.getElementById('feed-btn').disabled = (m.currentPoints < 5);
     }
 
-    function handleFeed() {
-      const btn = document.getElementById('feed-btn');
-      btn.disabled = true;
-      btn.innerText = "กำลังประมวลผล...";
-
-      google.script.run
-        .withSuccessHandler(function(res) {
-          alert(res.message);
-          loadData();
-          btn.innerText = "ให้อาหาร (ใช้ 5 แต้ม)";
-        })
-        .processFeed(USER_ID);
-    }
+    // รันฟังก์ชัน main เมื่อโหลดหน้าเสร็จ
+    window.onload = main;
   </script>
 </body>
 </html>

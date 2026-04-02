@@ -1,19 +1,32 @@
-// ไฟล์ EventHandler.gs
-
 /**
- * ฟังก์ชันหลักในการแยกแยะประเภทเหตุการณ์ (Event)
+ * 🧠 EVENTHANDLER.gs
+ * จัดการแยกแยะประเภทเหตุการณ์ (Event) จาก LINE
  */
+
 function handleEvent(event) {
   const userId = event.source.userId;
   if (!userId) return;
   
-  // 1. เรียก Loading ทันทีเพื่อให้ LINE แสดงสถานะ
+  // 1. แสดง Loading Animation ทันทีเพื่อ User Experience ที่ดี
   sendLoadingAnimation(userId);
 
-  if (event.type === 'follow') {
-    handleFollowEvent(event);
-  } else if (event.type === 'message') {
-    handleMessageEvent(event);
+  // 2. แยกแยะประเภท Event
+  try {
+    switch (event.type) {
+      case 'follow':
+        handleFollowEvent(event);
+        break;
+      case 'message':
+        handleMessageEvent(event);
+        break;
+      case 'unfollow':
+        console.log(`👤 User ${userId} unfollowed.`);
+        break;
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`);
+    }
+  } catch (err) {
+    console.error(`❌ Error handling ${event.type}: ${err.message}`);
   }
 }
 
@@ -23,12 +36,14 @@ function handleEvent(event) {
 function handleFollowEvent(event) {
   const userId = event.source.userId;
   const timestamp = new Date(event.timestamp);
+  
+  // ดึงโปรไฟล์ (ถ้าดึงไม่ได้จะได้ค่า Default จาก LineAPI.js)
   const profile = getUserProfile(userId);
   
   const followerData = {
     userId: userId,
-    displayName: profile.displayName || 'Unknown',
-    pictureUrl: profile.pictureUrl || '',
+    displayName: profile.displayName,
+    pictureUrl: profile.pictureUrl,
     language: profile.language || 'th',
     statusMessage: profile.statusMessage || '',
     firstFollowDate: timestamp,
@@ -41,13 +56,15 @@ function handleFollowEvent(event) {
     totalMessages: 0
   };
 
+  // บันทึกลง Sheet Followers
   upsertFollower(followerData);
 
+  // บันทึก Log
   saveLog({
     userId: userId,
     displayName: profile.displayName,
     userMessage: '[FOLLOW_EVENT]',
-    botReply: '[NO_WELCOME_MESSAGE]',
+    botReply: '[SYSTEM_REGISTERED]',
     intent: 'system.follow'
   });
 }
@@ -56,24 +73,24 @@ function handleFollowEvent(event) {
  * จัดการเมื่อมี "ข้อความ" ส่งเข้ามา (Message Event)
  */
 function handleMessageEvent(event) {
+  // รับเฉพาะข้อความตัวอักษร
   if (event.message.type !== 'text') return;
 
   const userId = event.source.userId;
   const userMessage = event.message.text;
-  
-  // 1. ดึงโปรไฟล์เพื่อนำชื่อมาบันทึก Log และซ่อมข้อมูลที่หายไป
   const profile = getUserProfile(userId);
 
-  // 2. บันทึก Log การสนทนาลง Sheet Conversations
+  // 1. อัปเดตข้อมูลการปฏิสัมพันธ์ (เวลาล่าสุด และจำนวนข้อความ)
+  updateFollowerInteraction(userId, profile); 
+
+  // 2. บันทึก Log การสนทนา
   saveLog({
     userId: userId,
-    displayName: profile.displayName || 'Customer', 
+    displayName: profile.displayName, 
     userMessage: userMessage,
-    botReply: '[NO_REPLY]',
+    botReply: '[ACKNOWLEDGED]',
     intent: 'general.chat'
   });
-
-  // 🎯 3. คุณต้องเพิ่มบรรทัดนี้เข้าไปครับ! (สำคัญมาก)
-  // ถ้าไม่มีบรรทัดนี้ ข้อมูลในชีท Followers จะไม่ยอมอัปเดตเวลาและจำนวนข้อความครับ
-  updateFollowerInteraction(userId, profile); 
+  
+  // หมายเหตุ: หากต้องการให้บอทตอบกลับแบบ Auto-Reply สามารถเพิ่ม replyMessage() ที่นี่ได้
 }

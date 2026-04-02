@@ -1,97 +1,185 @@
-// ไฟล์ SheetService.gs
-
 /**
- * ฟังก์ชันติดตั้งระบบ: สร้าง Sheet และหัวข้อคอลัมน์ให้อัตโนมัติ
+ * 📊 SHEETSERVICE.gs
+ * จัดการการอ่าน/เขียน ข้อมูลลงใน Google Sheets
  */
-function setupDatabase() {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  
-  const sheets = [
-    { name: CONFIG.SHEET_NAME.FOLLOWERS, head: ['User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 'First Follow Date', 'Last Follow Date', 'Follow Count', 'Status', 'Source Channel', 'Tags', 'Last Interaction', 'Total Messages'], color: "#d9ead3" },
-    { name: CONFIG.SHEET_NAME.CONVERSATIONS, head: ['Timestamp', 'User ID', 'Display Name', 'User Message', 'Bot Reply', 'Intent'], color: "#cfe2f3" },
-    // 🎯 อัปเดตหัวตาราง MEMBERS ให้ครบตามความต้องการ Admin Panel
-    { 
-      name: CONFIG.SHEET_NAME.MEMBERS, 
-      head: [
-        'Customer ID', 'Remark', 'Available Coupon', 'Current Points', 'Expiring Points', 
-        'Member Since', 'Member Until', 'Added From', 'Last Access', 'Total Visits', 
-        'Lifetime Points', 'Total Spending', 'Avg Spending', 'Balance (เงิน)',
-        'Full Name', 'LINE Name', 'Username', 'Gender', 'Email', 'Tel', 'Birthday', 'Address', 'Level', 'Plastic Card', 'Referrer'
-      ], 
-      color: "#fff2cc" 
-    }
-  ];
-
-  sheets.forEach(s => {
-    let sheet = ss.getSheetByName(s.name);
-    if (!sheet) {
-      sheet = ss.insertSheet(s.name);
-      sheet.appendRow(s.head);
-      sheet.getRange("1:1").setFontWeight("bold").setBackground(s.color).setWrap(true);
-    }
-  });
-}
 
 /**
- * บันทึกหรืออัปเดตข้อมูลผู้ติดตาม
+ * บันทึกหรืออัปเดตข้อมูลผู้ติดตาม (Followers)
  */
 function upsertFollower(data) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
-  const values = sheet.getDataRange().getValues();
-  let rowIndex = -1;
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
 
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][0] === data.userId) { rowIndex = i + 1; break; }
-  }
+    // 1. ถ้าหาชีทไม่เจอ ให้รัน Setup เพื่อสร้างชีทและ Header ทันที
+    if (!sheet) {
+      console.log(`System: Sheet "${CONFIG.SHEET_NAME.FOLLOWERS}" not found. Running setup...`);
+      setupDatabase();
+      sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
+    }
 
-  const rowData = [
-    data.userId, data.displayName, data.pictureUrl, data.language, data.statusMessage,
-    data.firstFollowDate, data.lastFollowDate, data.followCount, data.status,
-    data.sourceChannel, data.tags, data.lastInteraction, data.totalMessages
-  ];
+    // 2. ดึงข้อมูลทั้งหมดเพื่อค้นหา UserId เดิม
+    const values = sheet.getDataRange().getValues();
+    let rowIndex = -1;
 
-  if (rowIndex > 0) {
-    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
-  } else {
-    sheet.appendRow(rowData);
+    // ค้นหา UserId ใน Column A (Index 0)
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][0] && values[i][0].toString() === data.userId.toString()) { 
+        rowIndex = i + 1; 
+        break; 
+      }
+    }
+
+    // 3. เตรียมโครงสร้างข้อมูลให้ตรงกับ Header ใน setupDatabase
+    const rowData = [
+      data.userId || "",
+      data.displayName || "Unknown",
+      data.pictureUrl || "",
+      data.language || "th",
+      data.statusMessage || "",
+      data.firstFollowDate || new Date(),
+      data.lastFollowDate || new Date(),
+      data.followCount || 1,
+      data.status || "active",
+      data.sourceChannel || "LINE",
+      data.tags || "",
+      data.lastInteraction || new Date(),
+      data.totalMessages || 0
+    ];
+
+    // 4. บันทึกข้อมูล
+    if (rowIndex > 0) {
+      // กรณีพบข้อมูลเดิม: อัปเดตเฉพาะแถวนั้น
+      // หมายเหตุ: ถ้าต้องการสะสมค่า เช่น followCount สามารถดึงค่าเก่ามาบวกเพิ่มตรงนี้ได้
+      sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+      console.log(`✅ Updated follower: ${data.displayName} (Row: ${rowIndex})`);
+    } else {
+      // กรณีไม่พบข้อมูล: เพิ่มแถวใหม่ต่อท้าย
+      sheet.appendRow(rowData);
+      console.log(`✅ Added new follower: ${data.displayName}`);
+    }
+
+  } catch (error) {
+    console.error("❌ Error in upsertFollower:", error.message);
+    throw error; // ส่ง Error ต่อไปให้ Handler หลักบันทึก Log
   }
 }
 
+/**
+ * อัปเดตการปฏิสัมพันธ์ล่าสุด (เวลา และ จำนวนข้อความ)
+ */
 function updateFollowerInteraction(userId, profile = null) {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
   const data = sheet.getDataRange().getValues();
+  const headers = data[0];
   
+  const colLastSeen = headers.indexOf('Last Interaction') + 1;
+  const colTotalMsg = headers.indexOf('Total Messages') + 1;
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === userId) {
       const rowIndex = i + 1;
       
-      // 1. อัปเดต Last Interaction (L) และ Total Messages (M)
-      sheet.getRange(rowIndex, 12).setValue(new Date());
-      const currentMessages = Number(data[i][12]) || 0;
-      sheet.getRange(rowIndex, 13).setValue(currentMessages + 1);
+      // 1. อัปเดตเวลาล่าสุด
+      sheet.getRange(rowIndex, colLastSeen).setValue(new Date());
       
-      // 2. 🛠️ ซ่อมข้อมูล: หากคอลัมน์ B, C, D ว่างเปล่า ให้เติมจาก Profile
+      // 2. เพิ่มจำนวนข้อความสะสม
+      const currentMessages = Number(data[i][colTotalMsg - 1]) || 0;
+      sheet.getRange(rowIndex, colTotalMsg).setValue(currentMessages + 1);
+      
+      // 3. ซ่อมข้อมูลโปรไฟล์ (ถ้าว่าง)
       if (profile) {
         if (!data[i][1]) sheet.getRange(rowIndex, 2).setValue(profile.displayName);
         if (!data[i][2]) sheet.getRange(rowIndex, 3).setValue(profile.pictureUrl);
-        if (!data[i][3]) sheet.getRange(rowIndex, 4).setValue(profile.language || 'th');
       }
-      
-      SpreadsheetApp.flush();
       return;
     }
   }
 }
 
 /**
- * บันทึกประวัติการสนทนา
+ * บันทึกประวัติการสนทนา (Log)
  */
 function saveLog(data) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.CONVERSATIONS);
+    sheet.appendRow([
+      new Date(), 
+      data.userId, 
+      data.displayName || 'Unknown', 
+      data.userMessage || '', 
+      data.botReply || '', 
+      data.intent || ''
+    ]);
+  } catch (e) {
+    console.error("❌ saveLog Error: " + e.message);
+  }
+}
+
+/**
+ * 🛠️ setupDatabase
+ * ฟังก์ชันสำหรับสร้างชีทและหัวตารางเริ่มต้นให้ครบถ้วนตามโครงสร้างที่ออกแบบไว้
+ */
+function setupDatabase() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.CONVERSATIONS);
-  sheet.appendRow([
-    new Date(), data.userId, data.displayName, data.userMessage, data.botReply, data.intent
-  ]);
+  
+  // 1. รายการชีทและ Header ที่ต้องมี (อัปเดตให้รองรับหน้า Card แบบละเอียด)
+  const requiredSheets = [
+    {
+      name: CONFIG.SHEET_NAME.FOLLOWERS,
+      headers: [
+        "User ID", "Display Name", "Picture URL", "Language", "Status Message",
+        "First Follow", "Last Follow", "Follow Count", "Status", 
+        "Source", "Tags", "Last Interaction", "Total Messages"
+      ],
+      color: "#4a86e8" // สีน้ำเงินสำหรับงานระบบ
+    },
+    {
+      name: CONFIG.SHEET_NAME.CONVERSATIONS,
+      headers: ["Timestamp", "User ID", "Display Name", "User Message", "Bot Reply", "Intent"],
+      color: "#673ab7" // สีม่วงสำหรับ Log
+    },
+    {
+      name: CONFIG.SHEET_NAME.MEMBERS, // หรือ "Sheet1"
+      headers: [
+        "Customer ID", "Remark", "Available Coupon", "Current Points", "Expiring Points", 
+        "Member Since", "Member Until", "Added From", "Last Access", "Total Visits", 
+        "Lifetime Points", "Total Spending", "Avg Spending", "Balance (เงิน)",
+        "Full Name", "LINE Name", "Username", "Gender", "Email", "Tel", "Birthday", 
+        "Address", "Level", "Plastic Card", "Referrer"
+      ],
+      color: "#f36f21" // สีส้มทองธีม Member
+    }
+  ];
+
+  requiredSheets.forEach(sheetInfo => {
+    let sheet = ss.getSheetByName(sheetInfo.name);
+    
+    if (!sheet) {
+      // กรณีไม่มีชีท: สร้างใหม่และใส่ Header
+      sheet = ss.insertSheet(sheetInfo.name);
+      sheet.getRange(1, 1, 1, sheetInfo.headers.length)
+           .setValues([sheetInfo.headers])
+           .setBackground(sheetInfo.color)
+           .setFontColor("#ffffff")
+           .setFontWeight("bold")
+           .setHorizontalAlignment("center");
+      
+      // Freeze แถวแรกเพื่อให้ดูง่ายเวลาเลื่อนลง
+      sheet.setFrozenRows(1);
+      
+      // ปรับขนาดคอลัมน์อัตโนมัติเบื้องต้น
+      sheet.autoResizeColumns(1, sheetInfo.headers.length);
+      
+      console.log(`✅ สร้างชีทเรียบร้อย: ${sheetInfo.name}`);
+    } else {
+      // กรณีมีชีทอยู่แล้ว: ตรวจสอบเผื่อคุณต้องการอัปเดต Header ใหม่
+      // (Optional) sheet.getRange(1, 1, 1, sheetInfo.headers.length).setValues([sheetInfo.headers]);
+      console.log(`ℹ️ ชีท ${sheetInfo.name} มีอยู่ในระบบแล้ว`);
+    }
+  });
+  
+  return "🚀 การตั้งค่าฐานข้อมูลเสร็จสมบูรณ์!";
 }
