@@ -136,71 +136,60 @@
   </div>
 
   <script>
-    // 2. ฟังก์ชันหลักสำหรับ LIFF
-    async function main() {
-      try {
-        // เปลี่ยน LIFF ID ให้ตรงกับหน้า Console ของคุณ
-        await liff.init({ liffId: "2009630242-iPO8WjV7" });
+  async function main() {
+    console.log("🚀 LIFF Starting...");
+    try {
+      // 1. ตรวจสอบการ Init
+      await liff.init({ liffId: "2009630242-iPO8WjV7" });
+      console.log("✅ LIFF Initialized");
 
-        if (!liff.isLoggedIn()) {
-          liff.login();
+      if (!liff.isLoggedIn()) {
+        console.log("🔑 Not Logged In, Redirecting...");
+        liff.login();
+        return;
+      }
+
+      const profile = await liff.getProfile();
+      console.log("👤 Profile Loaded:", profile.userId);
+      loadData(profile.userId);
+
+    } catch (err) {
+      console.error("❌ LIFF Error:", err);
+      document.getElementById('loading-screen').innerHTML = `
+        <div style="padding:20px;">
+          <p>❌ เกิดข้อผิดพลาดในการเชื่อมต่อ LINE</p>
+          <small style="color:red;">${err.message}</small>
+          <button onclick="location.reload()" style="margin-top:10px; padding:10px; border-radius:10px;">ลองใหม่อีกครั้ง</button>
+        </div>
+      `;
+    }
+  }
+
+  function loadData(userId) {
+    console.log("📡 Fetching Member Data for:", userId);
+    google.script.run
+      .withSuccessHandler(function(data) {
+        console.log("📦 Data Received:", data);
+        if (!data) {
+          console.log("⚠️ No Member Data, showing Registration...");
+          // แทนที่จะ Redirect URL ยาวๆ ให้ใช้คำสั่งเปิด LIFF ไปหน้าสมัคร (ถ้าแยกไฟล์) 
+          // หรือเปลี่ยนหน้าด้วยการซ่อน/แสดง Div แทน (วิธีนี้เสถียรกว่ามาก)
+          window.location.href = liff.getSourceInfo().endpointUrl + "?userId=" + userId;
           return;
         }
+        renderUI(data);
+      })
+      .withFailureHandler(function(err) {
+        console.error("🔌 GAS Error:", err);
+        document.getElementById('loading-screen').innerHTML = `
+          <p>❌ ไม่สามารถติดต่อฐานข้อมูลได้</p>
+          <small>${err.message}</small>
+        `;
+      })
+      .getCustomerProfile(userId);
+  }
 
-        const profile = await liff.getProfile();
-        loadData(profile.userId);
-      } catch (err) {
-        console.error("LIFF Init Error", err);
-        document.getElementById('loading-screen').innerHTML = "<p>❌ ไม่สามารถเชื่อมต่อ LINE ได้</p>";
-      }
-    }
-
-    function loadData(userId) {
-      google.script.run
-        .withSuccessHandler(function(data) {
-          if (!data) {
-            // 3. ถ้าไม่พบข้อมูลสมาชิก ให้ Redirect ไปหน้าสมัคร
-            window.location.href = "<?= ScriptApp.getService().getUrl() ?>?userId=" + userId;
-            return;
-          }
-          renderUI(data);
-        })
-        .withFailureHandler(err => {
-          document.getElementById('loading-screen').innerHTML = "<p>❌ เกิดข้อผิดพลาด กรุณาลองใหม่</p>";
-        })
-        .getCustomerProfile(userId);
-    }
-
-    function renderUI(data) {
-      document.getElementById('loading-screen').style.display = 'none';
-      
-      document.getElementById('display-name').innerText = data.name;
-      document.getElementById('display-id').innerText = data.memberId;
-      document.getElementById('display-level').innerText = data.level;
-      document.getElementById('display-points').innerText = data.points.toLocaleString();
-      
-      document.getElementById('member-qr').src = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${data.memberId}&choe=UTF-8`;
-
-      if(data.pointsExpiring > 0) {
-        document.getElementById('display-expiring').innerText = 
-          `${data.pointsExpiring} คะแนนจะหมดอายุในวันที่ ${data.expiringDate}`;
-      }
-
-      const spending = data.totalSpending || 0;
-      const target = 5000;
-      const progress = Math.min((spending / target) * 100, 100);
-      document.getElementById('level-progress').style.width = progress + "%";
-      
-      if (spending < target) {
-        document.getElementById('next-level-text').innerText = 
-          `สะสมอีก ${(target - spending).toLocaleString()} บาท เพื่อระดับถัดไป`;
-      } else {
-        document.getElementById('next-level-text').innerText = `คุณคือสมาชิกระดับสูงสุด 🎉`;
-      }
-    }
-
-    // รันฟังก์ชัน main เมื่อโหลดหน้าเสร็จ
-    window.onload = main;
-  </script>
+  window.onload = main;
+</script>
 </body>
 </html>
