@@ -7,20 +7,17 @@ function handleEvent(event) {
   const userId = event.source.userId;
   if (!userId) return;
   
-  // 1. แสดง Loading Animation เพื่อ UX ที่ดี
-  sendLoadingAnimation(userId);
-
-  // 2. แยกแยะประเภท Event
   try {
     switch (event.type) {
       case 'follow':
         handleFollowEvent(event);
         break;
       case 'message':
+        sendLoadingAnimation(userId); 
         handleMessageEvent(event);
         break;
       case 'unfollow':
-        console.log("👤 User " + userId + " unfollowed.");
+        handleUnfollowEvent(event); 
         break;
       default:
         console.log("ℹ️ Unhandled event type: " + event.type);
@@ -28,6 +25,16 @@ function handleEvent(event) {
   } catch (err) {
     console.error("❌ Error handling " + event.type + ": " + err.message);
   }
+}
+
+/**
+ * ใหม่: ฟังก์ชันจัดการเมื่อผู้ใช้ Block (Unfollow)
+ */
+function handleUnfollowEvent(event) {
+  const userId = event.source.userId;
+  console.log("👤 User " + userId + " blocked the bot.");
+  
+  updateFollowerStatus(userId, "blocked");
 }
 
 /**
@@ -85,14 +92,14 @@ function handleMessageEvent(event) {
 }
 
 /**
- * จัดการเมื่อมีการเพิ่มเพื่อน
+ * จัดการเมื่อมีการเพิ่มเพื่อน (ตัดส่วนการส่งข้อความออก)
  */
 function handleFollowEvent(event) {
   const userId = event.source.userId;
   const profile = getUserProfile(userId);
   const timestamp = new Date(event.timestamp);
 
-  // บันทึกข้อมูลผู้ติดตาม [cite: 15]
+  // 1. บันทึกข้อมูลผู้ติดตามลง Google Sheets เท่านั้น
   upsertFollower({
     userId: userId,
     displayName: profile.displayName,
@@ -105,6 +112,6 @@ function handleFollowEvent(event) {
     sourceChannel: 'LINE'
   });
 
-  const welcomeMsg = "สวัสดีคุณ " + profile.displayName + " ยินดีต้อนรับสู่ Daily Pet Shop ค่ะ! 🐶";
-  replyMessage(event.replyToken, welcomeMsg);
+  // 2. ส่วนการส่ง welcomeMsg และ replyMessage ถูกตัดออกตามเงื่อนไข
+  console.log("👤 New Follower: " + profile.displayName + " (Data saved to sheet)");
 }

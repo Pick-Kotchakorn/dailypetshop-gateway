@@ -18,7 +18,7 @@ const CONFIG = {
   },
 
   // --- Dialogflow Settings (Added) ---
-  DF_PROJECT_ID: props.getProperty('DF_PROJECT_ID') || "molten-avatar-480809-j3",
+  DF_PROJECT_ID: props.getProperty('DF_PROJECT_ID') || "dailypetshop-dailogflow-eayr",
   DF_SERVICE_ACCOUNT_EMAIL: props.getProperty('DF_SERVICE_ACCOUNT_EMAIL'),
   // จัดการเรื่อง Private Key ให้รองรับการขึ้นบรรทัดใหม่ที่ถูกต้อง
   DF_PRIVATE_KEY: props.getProperty('DF_PRIVATE_KEY') ? props.getProperty('DF_PRIVATE_KEY').replace(/\\n/g, '\n') : null

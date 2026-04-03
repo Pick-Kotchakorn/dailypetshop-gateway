@@ -183,3 +183,37 @@ function setupDatabase() {
   
   return "🚀 การตั้งค่าฐานข้อมูลเสร็จสมบูรณ์!";
 }
+
+/**
+ * ใหม่: อัปเดตสถานะของผู้ติดตาม (เช่น active -> blocked)
+ */
+function updateFollowerStatus(userId, newStatus) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // ค้นหาตำแหน่งคอลัมน์ "Status" (ปกติคือคอลัมน์ที่ 9 หรือ Index 8)
+    const colStatus = headers.indexOf('Status') + 1;
+    
+    if (colStatus <= 0) {
+      console.error("❌ ไม่พบหัวตาราง 'Status' ในชีท Followers");
+      return;
+    }
+
+    // วนลูปหาแถวที่มี User ID ตรงกัน
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString() === userId.toString()) {
+        const rowIndex = i + 1;
+        // อัปเดตค่าสถานะใหม่ลงใน Cell
+        sheet.getRange(rowIndex, colStatus).setValue(newStatus);
+        console.log(`✅ Updated status for ${userId} to ${newStatus}`);
+        return;
+      }
+    }
+    console.warn(`⚠️ ไม่พบ User ID ${userId} ในระบบเพื่ออัปเดตสถานะ`);
+  } catch (e) {
+    console.error("❌ updateFollowerStatus Error: " + e.message);
+  }
+}

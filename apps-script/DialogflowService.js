@@ -75,3 +75,22 @@ function getGoogleAccessToken() {
     return null;
   }
 }
+
+/**
+ * ฟังก์ชันสำหรับทดสอบการเชื่อมต่อ Dialogflow โดยเฉพาะ
+ */
+function testDialogflowConnection() {
+  const testUserId = "test-user-123";
+  const testMessage = "สวัสดี";
+  
+  try {
+    console.log("🔍 เริ่มการทดสอบ...");
+    const response = detectIntent(testUserId, testMessage);
+    console.log("✅ เชื่อมต่อสำเร็จ!");
+    console.log("ตอบกลับจาก AI: " + response.queryResult.fulfillmentText);
+  } catch (err) {
+    console.error("❌ การเชื่อมต่อล้มเหลว!");
+    console.error("สาเหตุ: " + err.message);
+    // ตรวจสอบว่าลืมเปิด API หรือ Project ID ผิดหรือไม่
+  }
+}
