@@ -81,12 +81,11 @@ function callLineApi(url, method, payload = null) {
  */
 function markAsRead(readToken) {
   if (!readToken) return false;
-  
   try {
     const url = "https://api.line.me/v2/bot/v2/operator/markAsRead";
     const payload = { markAsReadToken: readToken };
-
-    // ใช้ callLineApi ที่สร้างไว้เพื่อความเร็วและมาตรฐาน Header
+    
+    // บังคับส่งทันที
     const response = callLineApi(url, "post", payload);
     
     if (response.getResponseCode() === 200) {

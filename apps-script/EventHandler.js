@@ -41,7 +41,6 @@ function handleUnfollowEvent(event) {
  * 🧠 EVENTHANDLER.gs - เวอร์ชั่นปรับปรุงลำดับ UX ตามวิดีโอ (พร้อมใช้งาน)
  */
 function handleMessageEvent(event) {
-  // ตรวจสอบว่าเป็นข้อความประเภท Text เท่านั้น
   if (event.message.type !== 'text') return;
 
   const userId = event.source.userId;
@@ -50,70 +49,55 @@ function handleMessageEvent(event) {
   const markAsReadToken = event.markAsReadToken; 
 
   try {
-    // 🌟 STEP 1: ขึ้นสถานะ "อ่านแล้ว" (Read) ทันที 
-    // เป็นการตอบสนองแรกที่ User จะเห็นในหน้าแชท
+    // 🌟 ขั้นตอนที่ 1: ขึ้นสถานะ "อ่านแล้ว" ทันที (Immediate Read)
+    // เราทำส่วนนี้ก่อนเพื่อให้ User เห็นการตอบสนองแรกสุด
     if (markAsReadToken) {
       markAsRead(markAsReadToken);
     }
 
-    // 🌟 STEP 2: แสดง Loading Animation (จุดสามจุด) ทันที
-    // เพื่อให้ User ทราบว่าระบบกำลังประมวลผลอยู่
+    // 🌟 ขั้นตอนที่ 2: แสดง Loading Animation (จุดสามจุด)
+    // เพื่อบอก User ว่าระบบรับทราบและกำลังคิดคำตอบอยู่
     sendLoadingAnimation(userId);
 
-    // --- [ ช่วงเวลาประมวลผลเบื้องหลัง ] ---
+    // --- [ ช่วงนี้คือการประมวลผลเบื้องหลังที่ใช้เวลา ] ---
 
-    // 🌟 STEP 3: ส่งข้อความไปวิเคราะห์ที่ Dialogflow
+    // 🌟 ขั้นตอนที่ 3: ส่งไป Dialogflow และดึงข้อมูล Profile
+    // การเรียก API ภายนอกจะมีความหน่วง เราจึงเอามาไว้หลัง Read/Loading
     const dfResponse = detectIntent(userId, userMessage);
+    const profile = getUserProfile(userId) || { displayName: 'Customer' };
+    
     const queryResult = dfResponse.queryResult;
     const intentName = queryResult.intent ? queryResult.intent.displayName : 'Default Fallback Intent';
     const fulfillmentText = queryResult.fulfillmentText || "ขออภัยค่ะ ไม่เข้าใจคำถามนี้";
-    
-    // 🌟 STEP 4: ดึงข้อมูลโปรไฟล์และอัปเดต Interaction
-    // ย้ายมาทำตรงนี้เพื่อไม่ให้ขวางความเร็วของ Step 1 และ 2
-    const profile = getUserProfile(userId) || { displayName: 'Customer' }; 
+
+    // อัปเดตข้อมูลการปฏิสัมพันธ์ (ทำแบบเงียบๆ เบื้องหลัง)
     updateFollowerInteraction(userId, profile);
 
-    // 🌟 STEP 5: หน่วงเวลาเพื่อให้ดูเป็นธรรมชาติ (Natural Delay)
-    // เลียนแบบการพิมพ์ของมนุษย์ตามที่เห็นในวิดีโอตัวอย่าง
-    Utilities.sleep(1200); 
+    // 🌟 ขั้นตอนที่ 4: หน่วงเวลาให้ดูเป็นธรรมชาติ (Natural Delay)
+    // หากระบบประมวลผลเร็วเกินไป User จะรู้สึกเหมือนคุยกับหุ่นยนต์ 
+    // การใส่ Sleep สั้นๆ จะช่วยให้ UX ดูเหมือนมีการพิมพ์จริงๆ
+    Utilities.sleep(1500);
 
-    // 🌟 STEP 6: เตรียมคำตอบและส่งกลับ
+    // 🌟 ขั้นตอนที่ 5: ส่งข้อความตอบกลับ
     if (intentName === 'Check_Points') {
       const memberData = getCustomerProfile(userId);
       if (memberData) {
-        const pointMsg = "คุณ " + profile.displayName + " มีคะแนนสะสม " + memberData.points.toLocaleString() + " แต้มค่ะ 🐾";
+        const pointMsg = `คุณ ${profile.displayName} มีคะแนนสะสม ${memberData.points.toLocaleString()} แต้มค่ะ 🐾`;
         replyMessage(replyToken, pointMsg);
-        
-        // อัปเดตข้อมูลสำหรับบันทึก Log
-        saveLog({
-          userId: userId,
-          displayName: profile.displayName,
-          userMessage: userMessage,
-          botReply: pointMsg,
-          intent: intentName
-        });
+        saveLog({ userId, displayName: profile.displayName, userMessage, botReply: pointMsg, intent: intentName });
       } else {
         replyMessage(replyToken, "ไม่พบข้อมูลสมาชิกของคุณในระบบค่ะ");
       }
     } else {
-      // กรณี Intent ทั่วไป ส่งคำตอบจาก Dialogflow
+      // ส่งคำตอบทั่วไปจาก Dialogflow
       replyMessage(replyToken, fulfillmentText);
-      
-      // บันทึก Log
-      saveLog({
-        userId: userId,
-        displayName: profile.displayName,
-        userMessage: userMessage,
-        botReply: fulfillmentText,
-        intent: intentName
-      });
+      saveLog({ userId, displayName: profile.displayName, userMessage, botReply: fulfillmentText, intent: intentName });
     }
 
   } catch (error) {
     console.error("❌ Error in handleMessageEvent:", error);
-    // กรณีเกิดข้อผิดพลาดรุนแรง ให้แจ้งเตือนผู้ใช้
     if (replyToken) {
-      replyMessage(replyToken, "ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง");
+      replyMessage(replyToken, "ขออภัยค่ะ ระบบขัดข้องชั่วคราว");
     }
   }
 }
