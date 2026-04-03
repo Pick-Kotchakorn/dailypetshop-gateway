@@ -77,18 +77,18 @@ function updateFollowerInteraction(userId, profile = null) {
   const colLastSeen = headers.indexOf('Last Interaction') + 1;
   const colTotalMsg = headers.indexOf('Total Messages') + 1;
 
+  if (colLastSeen <= 0 || colTotalMsg <= 0) return; // ป้องกัน Error ถ้าหาคอลัมน์ไม่เจอ
+
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === userId) {
+    // ✅ แก้ไข: ใช้ toString() และ trim() เพื่อการเปรียบเทียบที่แม่นยำ 100%
+    if (data[i][0] && data[i][0].toString().trim() === userId.toString().trim()) {
       const rowIndex = i + 1;
       
-      // 1. อัปเดตเวลาล่าสุด
       sheet.getRange(rowIndex, colLastSeen).setValue(new Date());
       
-      // 2. เพิ่มจำนวนข้อความสะสม
       const currentMessages = Number(data[i][colTotalMsg - 1]) || 0;
       sheet.getRange(rowIndex, colTotalMsg).setValue(currentMessages + 1);
       
-      // 3. ซ่อมข้อมูลโปรไฟล์ (ถ้าว่าง)
       if (profile) {
         if (!data[i][1]) sheet.getRange(rowIndex, 2).setValue(profile.displayName);
         if (!data[i][2]) sheet.getRange(rowIndex, 3).setValue(profile.pictureUrl);

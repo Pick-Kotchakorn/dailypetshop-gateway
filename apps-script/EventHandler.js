@@ -13,7 +13,7 @@ function handleEvent(event) {
         handleFollowEvent(event);
         break;
       case 'message':
-        sendLoadingAnimation(userId); 
+        // ย้ายการแสดงผลทั้งหมดไปไว้ใน handleMessageEvent เพื่อคุม Sequence
         handleMessageEvent(event);
         break;
       case 'unfollow':
@@ -38,56 +38,83 @@ function handleUnfollowEvent(event) {
 }
 
 /**
- * จัดการ "ข้อความ" โดยดึงคำตอบจาก Dialogflow เท่านั้น
+ * 🧠 EVENTHANDLER.gs - เวอร์ชั่นปรับปรุงลำดับ UX ตามวิดีโอ (พร้อมใช้งาน)
  */
 function handleMessageEvent(event) {
+  // ตรวจสอบว่าเป็นข้อความประเภท Text เท่านั้น
   if (event.message.type !== 'text') return;
 
   const userId = event.source.userId;
   const userMessage = event.message.text;
   const replyToken = event.replyToken;
-  const profile = getUserProfile(userId);
+  const markAsReadToken = event.markAsReadToken; 
 
   try {
-    // 1. ส่งข้อความไปให้ Dialogflow วิเคราะห์ (เรียกใช้จาก DialogflowService.js)
+    // 🌟 STEP 1: ขึ้นสถานะ "อ่านแล้ว" (Read) ทันที 
+    // เป็นการตอบสนองแรกที่ User จะเห็นในหน้าแชท
+    if (markAsReadToken) {
+      markAsRead(markAsReadToken);
+    }
+
+    // 🌟 STEP 2: แสดง Loading Animation (จุดสามจุด) ทันที
+    // เพื่อให้ User ทราบว่าระบบกำลังประมวลผลอยู่
+    sendLoadingAnimation(userId);
+
+    // --- [ ช่วงเวลาประมวลผลเบื้องหลัง ] ---
+
+    // 🌟 STEP 3: ส่งข้อความไปวิเคราะห์ที่ Dialogflow
     const dfResponse = detectIntent(userId, userMessage);
-    
-    // 2. ดึงค่าจาก Dialogflow Response
     const queryResult = dfResponse.queryResult;
     const intentName = queryResult.intent ? queryResult.intent.displayName : 'Default Fallback Intent';
-    const fulfillmentText = queryResult.fulfillmentText || "ขออภัยค่ะ น้องบอทไม่เข้าใจคำถามนี้";
+    const fulfillmentText = queryResult.fulfillmentText || "ขออภัยค่ะ ไม่เข้าใจคำถามนี้";
     
-    /**
-     * 💡 Logic พิเศษ: ตรวจสอบคะแนนสะสมจาก Google Sheets
-     * เงื่อนไข: ชื่อ Intent ใน Dialogflow ต้องตั้งชื่อว่า 'Check_Points'
-     */
+    // 🌟 STEP 4: ดึงข้อมูลโปรไฟล์และอัปเดต Interaction
+    // ย้ายมาทำตรงนี้เพื่อไม่ให้ขวางความเร็วของ Step 1 และ 2
+    const profile = getUserProfile(userId) || { displayName: 'Customer' }; 
+    updateFollowerInteraction(userId, profile);
+
+    // 🌟 STEP 5: หน่วงเวลาเพื่อให้ดูเป็นธรรมชาติ (Natural Delay)
+    // เลียนแบบการพิมพ์ของมนุษย์ตามที่เห็นในวิดีโอตัวอย่าง
+    Utilities.sleep(1200); 
+
+    // 🌟 STEP 6: เตรียมคำตอบและส่งกลับ
     if (intentName === 'Check_Points') {
-      // เรียกใช้ฟังก์ชันให้ตรงกับ Membership.js [cite: 17]
       const memberData = getCustomerProfile(userId);
-      
       if (memberData) {
         const pointMsg = "คุณ " + profile.displayName + " มีคะแนนสะสม " + memberData.points.toLocaleString() + " แต้มค่ะ 🐾";
         replyMessage(replyToken, pointMsg);
+        
+        // อัปเดตข้อมูลสำหรับบันทึก Log
+        saveLog({
+          userId: userId,
+          displayName: profile.displayName,
+          userMessage: userMessage,
+          botReply: pointMsg,
+          intent: intentName
+        });
       } else {
-        replyMessage(replyToken, "ไม่พบข้อมูลสมาชิกของคุณในระบบค่ะ กรุณาสมัครสมาชิกก่อนนะคะ");
+        replyMessage(replyToken, "ไม่พบข้อมูลสมาชิกของคุณในระบบค่ะ");
       }
     } else {
-      // 3. ตอบกลับด้วยข้อความที่ตั้งไว้ใน Dialogflow Console โดยตรง (No Hard Code)
+      // กรณี Intent ทั่วไป ส่งคำตอบจาก Dialogflow
       replyMessage(replyToken, fulfillmentText);
+      
+      // บันทึก Log
+      saveLog({
+        userId: userId,
+        displayName: profile.displayName,
+        userMessage: userMessage,
+        botReply: fulfillmentText,
+        intent: intentName
+      });
     }
-
-    // 4. บันทึก Log ลง Google Sheets [cite: 22]
-    saveLog({
-      userId: userId,
-      displayName: profile.displayName,
-      userMessage: userMessage,
-      botReply: fulfillmentText,
-      intent: intentName
-    });
 
   } catch (error) {
     console.error("❌ Error in handleMessageEvent:", error);
-    replyMessage(replyToken, "ขออภัยค่ะ ระบบประมวลผลขัดข้อง กรุณาลองใหม่อีกครั้ง");
+    // กรณีเกิดข้อผิดพลาดรุนแรง ให้แจ้งเตือนผู้ใช้
+    if (replyToken) {
+      replyMessage(replyToken, "ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง");
+    }
   }
 }
 

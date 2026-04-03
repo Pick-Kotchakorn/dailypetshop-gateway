@@ -10,7 +10,8 @@ function sendLoadingAnimation(userId) {
   if (!userId) return;
   try {
     const url = "https://api.line.me/v2/bot/chat/loading/start";
-    const payload = { "chatId": userId, "loadingSeconds": 5 };
+    // ปรับเวลาเป็น 20 วินาที เพื่อความเสถียรในการแสดงผล
+    const payload = { "chatId": userId, "loadingSeconds": 20 }; 
     callLineApi(url, "post", payload);
   } catch (e) {
     console.error("❌ Loading Animation Error: " + e.message);
@@ -59,7 +60,7 @@ function callLineApi(url, method, payload = null) {
       "Authorization": "Bearer " + CONFIG.LINE_ACCESS_TOKEN,
       "Content-Type": "application/json"
     },
-    "muteHttpExceptions": true // เพื่อให้เราอ่าน Error จาก LINE ได้เอง
+    "muteHttpExceptions": true 
   };
 
   if (payload) options.payload = JSON.stringify(payload);
@@ -67,9 +68,50 @@ function callLineApi(url, method, payload = null) {
   const response = UrlFetchApp.fetch(url, options);
   const responseCode = response.getResponseCode();
 
-  if (responseCode !== 200) {
+  // 💡 ต้องยอมรับ Status 200 (ทั่วไป) และ 202 (สำหรับ Loading API)
+  if (responseCode !== 200 && responseCode !== 202) {
     console.error(`⚠️ LINE API Error (${responseCode}): ${response.getContentText()}`);
   }
 
   return response;
+}
+
+/**
+ * 🌟 ฟังก์ชันระบบขึ้นสถานะ "อ่านแล้ว" (Instant Read)
+ */
+function markAsRead(readToken) {
+  if (!readToken) return false;
+  
+  try {
+    const url = "https://api.line.me/v2/bot/v2/operator/markAsRead";
+    const payload = { markAsReadToken: readToken };
+
+    // ใช้ callLineApi ที่สร้างไว้เพื่อความเร็วและมาตรฐาน Header
+    const response = callLineApi(url, "post", payload);
+    
+    if (response.getResponseCode() === 200) {
+      console.log('✅ MarkAsRead successful.');
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`❌ markAsRead Error: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * 🌟 ใหม่: Helper function สำหรับลองทำงานซ้ำกรณี API ขัดข้อง
+ */
+function retry(fn, maxRetries, delay) {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return fn();
+    } catch (e) {
+      lastError = e;
+      if (i < maxRetries - 1) Utilities.sleep(delay);
+    }
+  }
+  throw lastError;
 }
