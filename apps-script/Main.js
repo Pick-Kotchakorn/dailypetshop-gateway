@@ -1,73 +1,54 @@
 /**
- * 🚀 MAIN.gs
- * จุดรับข้อมูลหลัก (Entry Point) ของระบบ
+ * 🚀 MAIN.gs (Production API Routing)
  */
 
-/**
- * POST Request: รับข้อมูลจาก Cloudflare Gateway / LINE Webhook
- */
 function doPost(e) {
   try {
-    // 1. ตรวจสอบความพร้อมของ Config ก่อนเริ่มงาน
     validateConfig();
 
     if (!e.postData || !e.postData.contents) {
-      return createJsonResponse({ status: 'error', message: 'No data received' });
+      return createJsonResponse({ status: 'error', message: 'No data' });
     }
 
-    const body = JSON.parse(e.postData.contents);
-    const events = body.events || [];
+    const payload = JSON.parse(e.postData.contents);
 
-    // 2. จัดการแต่ละ Event แยกกัน (ส่งไป EventHandler.js)
-    events.forEach(event => {
-      try {
-        handleEvent(event); 
-      } catch (eventError) {
-        console.error("❌ Event Processing Error:", eventError.message);
-      }
-    });
+    // 🛣️ Route 1: มาจาก LINE Webhook (โครงสร้างปกติ)
+    if (payload.events) {
+      payload.events.forEach(event => handleEvent(event));
+      return createJsonResponse({ status: 'ok' });
+    }
 
-    return createJsonResponse({ status: 'ok' });
-
-  } catch (error) {
-    console.error("❌ Critical Error in doPost:", error);
-    return createJsonResponse({ 
-      status: 'error', 
-      message: error.message 
-    });
-  }
-}
-
-/**
- * GET Request: สำหรับแสดงหน้า Web App (Member Card / Registration)
- */
-function doGet(e) {
-  try {
-    validateConfig();
-    
-    // ดึง userId จาก parameter (ถ้ามี)
-    const userId = e.parameter.userId;
-    
-    // สร้าง Template โดยเลือกหน้า Index เป็นหน้าหลัก
-    // (เราจะไปเช็คสถานะสมาชิกด้วย JavaScript ในหน้า Index แทน เพื่อความลื่นไหล)
-    const template = HtmlService.createTemplateFromFile('Index');
-    
-    // ส่งค่าไปที่หน้า HTML (ถ้าไม่มีจะเป็น undefined ซึ่ง JavaScript ในหน้าเว็บจะจัดการต่อเอง)
-    template.userId = userId || ""; 
-    
-    return template.evaluate()
-      .setTitle('Daily Pet Shop - Member')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    // 🛣️ Route 2: มาจาก LIFF หรือ Internal Call (โครงสร้าง Path) [cite: 14]
+    switch (payload.path) {
+      case "user/check": // [cite: 15]
+        return createJsonResponse(checkUserStatus(payload.userId));
       
+      case "user/register": // [cite: 15]
+        return createJsonResponse(registerNewMember(payload));
+
+      default:
+        return createJsonResponse({ status: 'error', message: 'Unknown path' });
+    }
+
   } catch (error) {
-    return HtmlService.createHtmlOutput("<b>System Error:</b> " + error.message);
+    console.error("❌ API Error:", error.message);
+    return createJsonResponse({ status: 'error', message: error.message });
   }
 }
 
 /**
- * ฟังก์ชันช่วยสร้าง JSON Response
+ * เช็คสถานะสมาชิกเบื้องต้น (กันซ้ำระดับ DB) [cite: 16, 17]
  */
+function checkUserStatus(userId) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
+  // ดึงเฉพาะคอลัมน์ A (User ID) มาเช็คเพื่อความเร็ว [cite: 16]
+  const ids = sheet.getRange("A:A").getValues().flat();
+  const exists = ids.indexOf(userId) > -1;
+  
+  return { exists: exists, userId: userId }; // [cite: 17]
+}
+
 function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);

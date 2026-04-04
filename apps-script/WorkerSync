@@ -1,0 +1,29 @@
+/**
+ * ฟังก์ชันสำหรับ Sync สถานะสมาชิกไปที่ Cloudflare KV (Production)
+ */
+function updateWorkerCache(userId, state) {
+  // ข้อมูลจากหน้าจอ Cloudflare ของคุณ
+  const CF_ACCOUNT_ID = "b37f9904ecaa889b6c118331144a1675"; 
+  const CF_KV_ID = "be9254a57dfc4a80a8f68660e9d860dc"; 
+  const CF_API_TOKEN = "cfat_yQzwNQOuC7oCGCe2tnxMXEjU7Ecw4jlAOLivQYVK85a5259f"; 
+
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_KV_ID}/values/user:${userId}`;
+  
+  const options = {
+    "method": "put",
+    "headers": {
+      "Authorization": "Bearer " + CF_API_TOKEN,
+      "Content-Type": "text/plain"
+    },
+    "payload": state
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    if (response.getResponseCode() === 200) {
+      console.log(`✅ Success: User ${userId} status updated to ${state} in Cloudflare KV`);
+    }
+  } catch (e) {
+    console.error("❌ KV Sync Error: " + e.message);
+  }
+}

@@ -1,204 +1,232 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base target="_top">
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Daily Pet Shop - Register</title>
-  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.css">
+
+  <!-- Font Prompt -->
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+
   <style>
-    :root {
-      --primary-color: #c54327;
-      --secondary-color: #f3e3c0;
-      --text-dark: #4A3F35;
-      --white: #ffffff;
+    body {
+      font-family: 'Prompt', sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      padding: 20px;
     }
 
-    body { 
-      font-family: 'Kanit', sans-serif; 
-      background-color: var(--secondary-color); 
-      color: var(--text-dark);
-      padding: 15px; margin: 0;
-      display: flex; justify-content: center;
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
-    .form-container { 
-      background: var(--white); padding: 30px; border-radius: 25px; 
-      box-shadow: 0 8px 20px rgba(197, 67, 39, 0.15); 
-      width: 100%; max-width: 450px; margin: auto;
+    h2 {
+      color: #c54327;
+      text-align: center;
     }
 
-    h2 { color: var(--primary-color); text-align: center; margin-bottom: 25px; font-weight: 600; }
-    .input-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 6px; font-size: 0.9em; font-weight: 500; color: #666; }
-    
-    input, select, textarea { 
-      width: 100%; padding: 14px; border: 1.5px solid #eee; border-radius: 12px; 
-      box-sizing: border-box; font-family: 'Kanit', sans-serif; font-size: 16px;
+    label {
+      font-weight: 500;
+      margin-top: 10px;
+      display: block;
     }
 
-    .readonly-input { background-color: #f9f9f9; color: #888; cursor: not-allowed; border-style: dashed; }
-
-    .btn-submit { 
-      width: 100%; background: var(--primary-color); color: white; border: none; 
-      padding: 16px; border-radius: 30px; font-size: 1.1em; font-weight: 500;
-      cursor: pointer; margin-top: 20px;
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-family: 'Prompt', sans-serif;
     }
 
-    .btn-submit:disabled { background-color: #ccc; cursor: not-allowed; }
+    input[readonly] {
+      background: #eee;
+    }
 
-    #loading-overlay {
-      position: fixed; top:0; left:0; width:100%; height:100%;
-      background: rgba(255, 255, 255, 0.95); display: none; flex-direction: column; 
-      justify-content: center; align-items: center; z-index: 1000;
+    button {
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px;
+      background: #c54327;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #a8361f;
     }
   </style>
 </head>
+
 <body>
 
-  <div id="loading-overlay">
-    <img src="https://cdn-icons-png.flaticon.com/512/616/616408.png" width="60" style="filter: hue-rotate(330deg); margin-bottom: 15px;">
-    <p id="loading-text" style="color: var(--primary-color); font-weight: 500;">กำลังประมวลผล...</p>
-  </div>
+<div class="container">
+  <h2>สมัครสมาชิก</h2>
 
-  <div class="form-container">
-    <h2>ลงทะเบียนสมาชิก 🐾</h2>
-    <form id="regForm">
-      <input type="hidden" id="userId" name="userId">
-      
-      <div class="input-group">
-        <label>ชื่อ LINE</label>
-        <input type="text" id="lineName" name="lineName" class="readonly-input" readonly required>
-      </div>
+  <form id="registerForm">
 
-      <div class="input-group">
-        <label>ชื่อ-นามสกุล</label>
-        <input type="text" id="fullName" name="fullName" placeholder="กรอกชื่อจริง-นามสกุล" required>
-      </div>
+    <label>Name</label>
+    <input type="text" id="name" required>
 
-      <div class="input-group">
-        <label>อีเมล (Email)</label>
-        <input type="email" id="email" name="email" placeholder="example@email.com" required>
-      </div>
+    <label>LINE Name</label>
+    <input type="text" id="lineName" readonly>
 
-      <div class="row" style="display: flex; gap: 10px;">
-        <div class="input-group" style="flex: 1;">
-          <label>เพศ</label>
-          <select id="gender" name="gender" required>
-            <option value="">เลือก</option>
-            <option value="ชาย">ชาย</option>
-            <option value="หญิง">หญิง</option>
-          </select>
-        </div>
-        <div class="input-group" style="flex: 1;">
-          <label>วันเกิด</label>
-          <input type="date" id="birthday" name="birthday" required>
-        </div>
-      </div>
+    <label>User ID</label>
+    <input type="text" id="userId" readonly>
 
-      <div class="input-group">
-        <label>เบอร์โทรศัพท์</label>
-        <input type="tel" id="tel" name="tel" pattern="[0-9]{9,10}" placeholder="08XXXXXXXX" required>
-      </div>
+    <label>Username</label>
+    <input type="text" id="username" required>
 
-      <hr style="border: 0.5px solid #f0f0f0; margin: 25px 0;">
-      
-      <label>ข้อมูลที่อยู่</label>
-      <div class="input-group"><input type="text" id="district" name="district" placeholder="ตำบล / แขวง" required></div>
-      <div class="input-group"><input type="text" id="amphoe" name="amphoe" placeholder="อำเภอ / เขต" required></div>
-      <div class="input-group"><input type="text" id="province" name="province" placeholder="จังหวัด" required></div>
-      <div class="input-group"><input type="text" id="zipcode" name="zipcode" placeholder="รหัสไปรษณีย์" required></div>
-      <div class="input-group">
-        <textarea id="addr_detail" name="addr_detail" rows="2" placeholder="บ้านเลขที่, หมู่บ้าน, ซอย, ถนน" required></textarea>
-      </div>
+    <label>Gender</label>
+    <select id="gender" required>
+      <option value="">-- Select --</option>
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+    </select>
 
-      <button type="submit" id="submitBtn" class="btn-submit">ยืนยันการสมัครสมาชิก</button>
-    </form>
-  </div>
+    <label>Email</label>
+    <input type="email" id="email" required>
 
-  <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
-  <script type="text/javascript" src="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/dependencies/JQL.min.js"></script>
-  <script type="text/javascript" src="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/dependencies/typeahead.bundle.js"></script>
-  <script type="text/javascript" src="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.js"></script>
+    <label>Tel.</label>
+    <input type="tel" id="tel" required>
 
-  <script>
-    // เริ่มทำงานเมื่อเปิดหน้าเว็บ
-    async function main() {
-      const overlay = document.getElementById('loading-overlay');
-      const loadingText = document.getElementById('loading-text');
-      
-      try {
-        overlay.style.display = 'flex';
-        loadingText.innerText = "กำลังดึงข้อมูลโปรไฟล์...";
+    <label>Birthday</label>
+    <input type="date" id="birthday" required>
 
-        await liff.init({ liffId: "2009630242-iPO8WjV7" });
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-        const profile = await liff.getProfile();
-        document.getElementById('userId').value = profile.userId;
-        document.getElementById('lineName').value = profile.displayName;
-        overlay.style.display = 'none';
-      } catch (err) {
-        console.error("LIFF Error:", err);
-        alert("ไม่สามารถดึงข้อมูลโปรไฟล์ได้ กรุณาลองเปิดใหม่อีกครั้ง");
-        overlay.style.display = 'none';
+    <label>Province</label>
+    <select id="province"></select>
+
+    <label>District</label>
+    <select id="district"></select>
+
+    <label>Sub-district</label>
+    <select id="subdistrict"></select>
+
+    <label>Postal Code</label>
+    <input type="text" id="zipcode" readonly>
+
+    <label>Address Detail</label>
+    <textarea id="addressDetail" rows="3"></textarea>
+
+    <button type="submit">สมัครสมาชิก</button>
+
+  </form>
+</div>
+
+<script>
+  const GAS_URL = "YOUR_GAS_ENDPOINT";
+
+  // ✅ Mock address data (คุณสามารถเปลี่ยนเป็น API จริงภายหลัง)
+  const addressData = {
+    "Bangkok": {
+      "Bang Kho Laem": {
+        "Bang Khlo": "10120"
       }
     }
+  };
 
-    $(function () {
-      $.Thailand({
-        $district: $('#district'),
-        $amphoe: $('#amphoe'),
-        $province: $('#province'),
-        $zipcode: $('#zipcode'),
-      });
-      main();
+  // 🔹 Init
+  window.onload = () => {
+    const params = new URLSearchParams(window.location.search);
+
+    document.getElementById("userId").value = params.get("uid") || "";
+    document.getElementById("lineName").value = params.get("name") || "";
+
+    loadProvinces();
+  };
+
+  // 🔹 Load จังหวัด
+  function loadProvinces() {
+    const provinceSelect = document.getElementById("province");
+    provinceSelect.innerHTML = `<option value="">-- Select --</option>`;
+
+    Object.keys(addressData).forEach(p => {
+      provinceSelect.innerHTML += `<option value="${p}">${p}</option>`;
     });
+  }
 
-    document.getElementById('regForm').onsubmit = function(e) {
-      e.preventDefault();
-      
-      const btn = document.getElementById('submitBtn');
-      const overlay = document.getElementById('loading-overlay');
-      const loadingText = document.getElementById('loading-text');
-      
-      btn.disabled = true;
-      loadingText.innerText = "กำลังบันทึกข้อมูลสมาชิก...";
-      overlay.style.display = 'flex';
+  // 🔹 จังหวัด → เขต
+  document.getElementById("province").addEventListener("change", function() {
+    const districtSelect = document.getElementById("district");
+    districtSelect.innerHTML = `<option value="">-- Select --</option>`;
 
-      const f = this;
-      
-      // ✅ 1. ปรับปรุงลำดับการรวมที่อยู่ (ใช้เว้นวรรคเพื่อความยืดหยุ่น ต./แขวง หรือ อ./เขต)
-      const fullAddress = `${f.addr_detail.value} ${f.district.value} ${f.amphoe.value} ${f.province.value} ${f.zipcode.value}`;
+    const districts = addressData[this.value] || {};
 
-      const formData = {
-        userId: f.userId.value,
-        lineName: f.lineName.value,
-        fullName: f.fullName.value,
-        email: f.email.value,
-        gender: f.gender.value,
-        tel: f.tel.value,
-        birthday: f.birthday.value, // ✅ 2. ส่งฟอร์แมต YYYY-MM-DD
-        address: fullAddress
-      };
+    Object.keys(districts).forEach(d => {
+      districtSelect.innerHTML += `<option value="${d}">${d}</option>`;
+    });
+  });
 
-      google.script.run
-        .withSuccessHandler(function(response) {
-          overlay.style.display = 'none';
-          alert("ยินดีต้อนรับคุณ " + formData.fullName + " เข้าสู่ครอบครัว Daily Pet Shop ค่ะ! 🐾");
-          liff.closeWindow();
-        })
-        .withFailureHandler(function(err) {
-          overlay.style.display = 'none';
-          btn.disabled = false;
-          alert("เกิดข้อผิดพลาด: " + err.message);
-        })
-        .registerNewMember(formData);
+  // 🔹 เขต → แขวง
+  document.getElementById("district").addEventListener("change", function() {
+    const province = document.getElementById("province").value;
+    const subdistrictSelect = document.getElementById("subdistrict");
+    subdistrictSelect.innerHTML = `<option value="">-- Select --</option>`;
+
+    const subs = addressData[province][this.value] || {};
+
+    Object.keys(subs).forEach(s => {
+      subdistrictSelect.innerHTML += `<option value="${s}">${s}</option>`;
+    });
+  });
+
+  // 🔹 แขวง → zipcode
+  document.getElementById("subdistrict").addEventListener("change", function() {
+    const province = document.getElementById("province").value;
+    const district = document.getElementById("district").value;
+
+    const zip = addressData[province][district][this.value];
+    document.getElementById("zipcode").value = zip;
+  });
+
+  // 🔹 Submit
+  document.getElementById("registerForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    const data = {
+      path: "user/register",
+      userId: document.getElementById("userId").value,
+      name: document.getElementById("name").value,
+      lineName: document.getElementById("lineName").value,
+      username: document.getElementById("username").value,
+      gender: document.getElementById("gender").value,
+      email: document.getElementById("email").value,
+      tel: document.getElementById("tel").value,
+      birthday: document.getElementById("birthday").value,
+      province: document.getElementById("province").value,
+      district: document.getElementById("district").value,
+      subdistrict: document.getElementById("subdistrict").value,
+      zipcode: document.getElementById("zipcode").value,
+      addressDetail: document.getElementById("addressDetail").value
     };
-  </script>
+
+    try {
+      const res = await fetch(GAS_URL, {
+        method: "POST",
+        body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        alert("สมัครสมาชิกสำเร็จ 🎉");
+      } else {
+        alert("สมัครซ้ำหรือเกิดข้อผิดพลาด");
+      }
+
+    } catch (err) {
+      alert("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    }
+  });
+</script>
+
 </body>
 </html>

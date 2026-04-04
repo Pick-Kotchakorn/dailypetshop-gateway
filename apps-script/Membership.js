@@ -1,36 +1,30 @@
 /**
- * 🐾 MEMBERSHIP.gs
- * จัดการตรรกะเกี่ยวกับสมาชิก แต้มสะสม และการลงทะเบียน
- */
-
-/**
- * 🆕 ฟังก์ชันลงทะเบียนสมาชิกใหม่ (ปรับปรุงตามโครงสร้าง Sheet1 ล่าสุด)
+ * 🆕 ฟังก์ชันลงทะเบียนสมาชิกใหม่ (Production Version)
  */
 function registerNewMember(formData) {
   const lock = LockService.getScriptLock();
   try {
-    // 🔐 ล็อกระบบ 10 วินาที ป้องกันแถวทับกัน
     lock.waitLock(10000); 
 
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
     
-    if (!sheet) throw new Error("ไม่พบชีทระบบสมาชิก (Sheet1)");
-
     const data = sheet.getDataRange().getValues();
     const userId = formData.userId;
 
-    // 1. ตรวจสอบการสมัครซ้ำ
+    // 1. ตรวจสอบการสมัครซ้ำระดับ Database [cite: 18, 19]
     const isDuplicate = data.some(row => row[0] && row[0].toString() === userId.toString());
-    if (isDuplicate) throw new Error("คุณได้ลงทะเบียนสมาชิกเรียบร้อยแล้วค่ะ");
+    if (isDuplicate) return { success: false, message: "DUPLICATE" };
 
-    // 2. เตรียมข้อมูล 25 คอลัมน์ ตามลำดับที่คุณระบุ
+    // 2. เตรียมข้อมูลบันทึกลง Sheet (แมพตามฟิลด์จาก HTML) [cite: 20]
     const now = new Date();
+    const fullAddress = `${formData.addressDetail} ${formData.subdistrict} ${formData.district} ${formData.province} ${formData.zipcode}`;
+    
     const newRow = [
       userId,                   // Customer ID
       "สมัครสมาชิกใหม่",           // Remark
       0,                        // Available Coupon
-      50,                       // Current Points (ให้ 50 แต้มแรกเข้า)
+      50,                       // Current Points (แรกเข้า)
       0,                        // Expiring Points
       now,                      // Member Since
       "",                       // Member Until
@@ -41,26 +35,30 @@ function registerNewMember(formData) {
       0,                        // Total Spending
       0,                        // Avg Spending
       0,                        // Balance (เงิน)
-      formData.fullName,        // Full Name
+      formData.name,            // Full Name (จากฟิลด์ name ใน HTML)
       formData.lineName,        // LINE Name
-      "PET-" + userId.substring(1, 6), // Username (Gen เบื้องต้น)
+      formData.username,        // Username
       formData.gender,          // Gender
       formData.email,           // Email
       formData.tel,             // Tel
       formData.birthday,        // Birthday
-      formData.address,         // Address
+      fullAddress,              // Address (ที่อยู่แบบรวมร่าง)
       "Friend",                 // Level
       "-",                      // Plastic Card
       ""                        // Referrer
     ];
 
-    // 3. บันทึกลง Sheet
     sheet.appendRow(newRow);
+
+    // 3. 🚀 ส่งสัญญาณอัปเดต Cache ไปยัง Cloudflare Worker (สำคัญมาก) [cite: 26]
+    // หมายเหตุ: ฟังก์ชันนี้จะถูกเขียนเพิ่มในขั้นตอนถัดไป
+    updateWorkerCache(userId, "REGISTERED");
     
-    return { status: "success", message: "ลงทะเบียนสำเร็จ" };
+    return { success: true, message: "Registration successful" };
 
   } catch (e) {
-    throw new Error(e.message);
+    console.error("Error:", e.message);
+    return { success: false, message: e.message };
   } finally {
     lock.releaseLock();
   }

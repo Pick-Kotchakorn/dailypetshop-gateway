@@ -1,12 +1,19 @@
 {
-  "name": "dailypetshop-gateway",
-  "compatibility_date": "2026-03-29", 
-  "main": "src/index.js",
-  "observability": {
-    "enabled": true
-  },
-  "vars": {
-    "GAS_ENDPOINT": "https://script.google.com/macros/s/AKfycbz_kElS6ZfO9CazuBHPL5jz6F_TZMHagzFVoRybcgfh-qgqkdDaIDs-9alUE0-oUKNm/exec",
-    "ENABLE_DEBUG": "false"
-  }
+	"name": "dailypetshop-gateway",
+	"compatibility_date": "2026-03-29",
+	"main": "src/index.js",
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"GAS_ENDPOINT": "https://script.google.com/macros/s/AKfycbz_kElS6ZfO9CazuBHPL5jz6F_TZMHagzFVoRybcgfh-qgqkdDaIDs-9alUE0-oUKNm/exec",
+		"ENABLE_DEBUG": "false"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "DPS_USER_CACHE",
+			"id": "be9254a57dfc4a80a8f68660e9d860dc",
+			"remote": true
+		}
+	]
 }
