@@ -28,7 +28,7 @@ function handleEvent(event) {
 }
 
 /**
- * 💬 ฟังก์ชันจัดการข้อความ (ลำดับขั้นตอนตามมาตรฐาน UX)
+ * 💬 ฟังก์ชันจัดการข้อความ (ฉบับแก้ไขตำแหน่ง markAsReadToken)
  */
 function handleMessageEvent(event) {
   if (event.message.type !== 'text') return;
@@ -36,7 +36,9 @@ function handleMessageEvent(event) {
   const userId = event.source.userId;
   const userMessage = event.message.text;
   const replyToken = event.replyToken;
-  const markAsReadToken = event.markAsReadToken; 
+  
+  // ✅ แก้ไข: ดึง markAsReadToken จากภายในอ็อบเจกต์ message
+  const markAsReadToken = event.message.markAsReadToken; 
 
   try {
     // 🌟 1. ขึ้นสถานะ "อ่านแล้ว" และ "Loading" พร้อมกันทันที

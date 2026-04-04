@@ -77,15 +77,15 @@ function callLineApi(url, method, payload = null) {
 }
 
 /**
- * 🌟 ฟังก์ชันระบบขึ้นสถานะ "อ่านแล้ว" (Instant Read)
+ * 🌟 ฟังก์ชันระบบขึ้นสถานะ "อ่านแล้ว" (Fixed Version)
  */
 function markAsRead(readToken) {
   if (!readToken) return false;
   try {
-    const url = "https://api.line.me/v2/bot/v2/operator/markAsRead";
+    // แก้ไข URL เป็น /v2/bot/chat/markAsRead
+    const url = "https://api.line.me/v2/bot/chat/markAsRead"; 
     const payload = { markAsReadToken: readToken };
     
-    // บังคับส่งทันที
     const response = callLineApi(url, "post", payload);
     
     if (response.getResponseCode() === 200) {
