@@ -1,65 +1,73 @@
 /**
- * 🆕 ฟังก์ชันลงทะเบียนสมาชิกใหม่ (Production Version)
+ * 🐾 MEMBERSHIP.gs
+ * จัดการตรรกะเกี่ยวกับสมาชิก แต้มสะสม และการลงทะเบียน
+ */
+
+/**
+ * 🆕 ฟังก์ชันลงทะเบียนสมาชิกใหม่ (รับข้อมูลจาก Registration.html)
  */
 function registerNewMember(formData) {
   const lock = LockService.getScriptLock();
   try {
+    // 🔐 ล็อกระบบ 10 วินาที ป้องกันการสมัครพร้อมกันจนแถวทับกัน
     lock.waitLock(10000); 
 
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
     
+    if (!sheet) {
+      throw new Error("ไม่พบชีทระบบสมาชิก (Sheet1)");
+    }
+
     const data = sheet.getDataRange().getValues();
     const userId = formData.userId;
 
-    // 1. ตรวจสอบการสมัครซ้ำระดับ Database [cite: 18, 19]
+    // 1. ตรวจสอบว่ามี User ID นี้ในระบบสมาชิกหรือยัง (ป้องกันสมัครซ้ำ)
     const isDuplicate = data.some(row => row[0] && row[0].toString() === userId.toString());
-    if (isDuplicate) return { success: false, message: "DUPLICATE" };
+    if (isDuplicate) {
+      throw new Error("คุณได้ลงทะเบียนสมาชิกเรียบร้อยแล้วค่ะ");
+    }
 
-    // 2. เตรียมข้อมูลบันทึกลง Sheet (แมพตามฟิลด์จาก HTML) [cite: 20]
-    const now = new Date();
-    const fullAddress = `${formData.addressDetail} ${formData.subdistrict} ${formData.district} ${formData.province} ${formData.zipcode}`;
-    
+    // 2. เตรียมข้อมูลให้ตรงตามโครงสร้าง Header ใน Sheet ของคุณ
+    // ลำดับ: Customer ID, Remark, Available Coupon, Current Points, ..., Full Name, LINE Name, Email, Tel, Birthday, Address, ...
     const newRow = [
-      userId,                   // Customer ID
-      "สมัครสมาชิกใหม่",           // Remark
-      0,                        // Available Coupon
-      50,                       // Current Points (แรกเข้า)
-      0,                        // Expiring Points
-      now,                      // Member Since
-      "",                       // Member Until
-      "LIFF Registration",      // Added From
-      now,                      // Last Access
-      1,                        // Total Visits
-      50,                       // Lifetime Points
-      0,                        // Total Spending
-      0,                        // Avg Spending
-      0,                        // Balance (เงิน)
-      formData.name,            // Full Name (จากฟิลด์ name ใน HTML)
-      formData.lineName,        // LINE Name
-      formData.username,        // Username
-      formData.gender,          // Gender
-      formData.email,           // Email
-      formData.tel,             // Tel
-      formData.birthday,        // Birthday
-      fullAddress,              // Address (ที่อยู่แบบรวมร่าง)
-      "Friend",                 // Level
-      "-",                      // Plastic Card
-      ""                        // Referrer
+      userId,                   // Customer ID (A)
+      "ลงทะเบียนผ่านระบบ",         // Remark (B)
+      0,                        // Available Coupon (C)
+      0,                        // Current Points (D)
+      0,                        // Expiring Points (E)
+      new Date(),               // Member Since (F)
+      "",                       // Member Until (G)
+      "LINE LIFF",              // Added From (H)
+      new Date(),               // Last Access (I)
+      1,                        // Total Visits (J)
+      0,                        // Lifetime Points (K)
+      0,                        // Total Spending (L)
+      0,                        // Avg Spending (M)
+      0,                        // Balance (N)
+      formData.fullName,        // Full Name (O)
+      formData.lineName,        // LINE Name (P)
+      "",                       // Username (Q)
+      formData.gender,          // Gender (R)
+      formData.email,           // Email (S)
+      formData.tel,             // Tel (T)
+      formData.birthday,        // Birthday (U)
+      formData.address,         // Address (V)
+      "Friend",                 // Level (W)
+      "",                       // Plastic Card (X)
+      ""                        // Referrer (Y)
     ];
 
+    // 3. บันทึกข้อมูลลงบรรทัดใหม่
     sheet.appendRow(newRow);
-
-    // 3. 🚀 ส่งสัญญาณอัปเดต Cache ไปยัง Cloudflare Worker (สำคัญมาก) [cite: 26]
-    // หมายเหตุ: ฟังก์ชันนี้จะถูกเขียนเพิ่มในขั้นตอนถัดไป
-    updateWorkerCache(userId, "REGISTERED");
     
-    return { success: true, message: "Registration successful" };
+    return { status: "success", message: "บันทึกข้อมูลเรียบร้อย" };
 
-  } catch (e) {
-    console.error("Error:", e.message);
-    return { success: false, message: e.message };
+  } catch (error) {
+    console.error("❌ Registration Error: " + error.message);
+    throw new Error(error.message); // ส่ง Error กลับไปที่หน้า HTML เพื่อแจ้งเตือน User
   } finally {
+    // 🔓 ปล่อยล็อก
     lock.releaseLock();
   }
 }
