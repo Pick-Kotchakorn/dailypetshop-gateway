@@ -1,6 +1,7 @@
 /**
  * 🧠 EVENTHANDLER.gs
- * จัดการเหตุการณ์จาก LINE โดยเชื่อมต่อ Dialogflow 100% (No Hard Code)
+ * จัดการเหตุการณ์จาก LINE และควบคุมลำดับการตอบโต้ (UX)
+ * เชื่อมต่อ Dialogflow และ Google Sheets โดยดึงค่าจาก Config.js
  */
 
 function handleEvent(event) {
@@ -13,7 +14,6 @@ function handleEvent(event) {
         handleFollowEvent(event);
         break;
       case 'message':
-        // ย้ายการแสดงผลทั้งหมดไปไว้ใน handleMessageEvent เพื่อคุม Sequence
         handleMessageEvent(event);
         break;
       case 'unfollow':
@@ -28,17 +28,7 @@ function handleEvent(event) {
 }
 
 /**
- * ใหม่: ฟังก์ชันจัดการเมื่อผู้ใช้ Block (Unfollow)
- */
-function handleUnfollowEvent(event) {
-  const userId = event.source.userId;
-  console.log("👤 User " + userId + " blocked the bot.");
-  
-  updateFollowerStatus(userId, "blocked");
-}
-
-/**
- * 🧠 EVENTHANDLER.gs - เวอร์ชั่นปรับปรุงลำดับ UX ตามวิดีโอ (พร้อมใช้งาน)
+ * 💬 ฟังก์ชันจัดการข้อความ (ลำดับขั้นตอนตามมาตรฐาน UX)
  */
 function handleMessageEvent(event) {
   if (event.message.type !== 'text') return;
@@ -49,68 +39,85 @@ function handleMessageEvent(event) {
   const markAsReadToken = event.markAsReadToken; 
 
   try {
-    // 🌟 ขั้นตอนที่ 1: ขึ้นสถานะ "อ่านแล้ว" ทันที (Immediate Read)
-    // เราทำส่วนนี้ก่อนเพื่อให้ User เห็นการตอบสนองแรกสุด
+    // 🌟 1. ขึ้นสถานะ "อ่านแล้ว" และ "Loading" พร้อมกันทันที
     if (markAsReadToken) {
       markAsRead(markAsReadToken);
     }
-
-    // 🌟 ขั้นตอนที่ 2: แสดง Loading Animation (จุดสามจุด)
-    // เพื่อบอก User ว่าระบบรับทราบและกำลังคิดคำตอบอยู่
     sendLoadingAnimation(userId);
 
-    // --- [ ช่วงนี้คือการประมวลผลเบื้องหลังที่ใช้เวลา ] ---
-
-    // 🌟 ขั้นตอนที่ 3: ส่งไป Dialogflow และดึงข้อมูล Profile
-    // การเรียก API ภายนอกจะมีความหน่วง เราจึงเอามาไว้หลัง Read/Loading
+    // 🌟 2. ส่งไป Dialogflow เพื่อวิเคราะห์ Intent
     const dfResponse = detectIntent(userId, userMessage);
-    const profile = getUserProfile(userId) || { displayName: 'Customer' };
+    const profile = getUserProfile(userId) || { displayName: 'ลูกค้า' };
     
     const queryResult = dfResponse.queryResult;
     const intentName = queryResult.intent ? queryResult.intent.displayName : 'Default Fallback Intent';
-    const fulfillmentText = queryResult.fulfillmentText || "ขออภัยค่ะ ไม่เข้าใจคำถามนี้";
+    const fulfillmentText = queryResult.fulfillmentText;
 
-    // อัปเดตข้อมูลการปฏิสัมพันธ์ (ทำแบบเงียบๆ เบื้องหลัง)
+    // ตรวจสอบว่ามี Custom Payload (เช่น Flex Message) หรือไม่
+    const hasPayload = queryResult.fulfillmentMessages && 
+                       queryResult.fulfillmentMessages.some(m => m.payload);
+
+    // บันทึกการปฏิสัมพันธ์เบื้องหลัง
     updateFollowerInteraction(userId, profile);
 
-    // 🌟 ขั้นตอนที่ 4: หน่วงเวลาให้ดูเป็นธรรมชาติ (Natural Delay)
-    // หากระบบประมวลผลเร็วเกินไป User จะรู้สึกเหมือนคุยกับหุ่นยนต์ 
-    // การใส่ Sleep สั้นๆ จะช่วยให้ UX ดูเหมือนมีการพิมพ์จริงๆ
-    Utilities.sleep(1500);
+    // 🌟 3. เงียบเมื่อไม่รู้คำตอบ (Silence on Fallback)
+    // ปรับเงื่อนไข: จะเงียบก็ต่อเมื่อ (เป็น Fallback) และ (ไม่มีทั้งข้อความและไม่มี Payload)
+    if (intentName === 'Default Fallback Intent' && !fulfillmentText && !hasPayload) {
+      console.log(`ℹ️ Bot stayed silent for message: "${userMessage}"`);
+      return; 
+    }
 
-    // 🌟 ขั้นตอนที่ 5: ส่งข้อความตอบกลับ
+    // 🌟 4. ลดเวลาหน่วงให้สั้นลง (เหลือ 1 วินาที)
+    Utilities.sleep(1000);
+
+    // 🌟 5. ส่งคำตอบกลับ
+    // กรณีที่ 1: ตรวจสอบแต้มสมาชิก (Logic ภายใน Apps Script)
     if (intentName === 'Check_Points') {
       const memberData = getCustomerProfile(userId);
-      if (memberData) {
+      if (memberData && memberData.points !== undefined) {
         const pointMsg = `คุณ ${profile.displayName} มีคะแนนสะสม ${memberData.points.toLocaleString()} แต้มค่ะ 🐾`;
         replyMessage(replyToken, pointMsg);
         saveLog({ userId, displayName: profile.displayName, userMessage, botReply: pointMsg, intent: intentName });
       } else {
-        replyMessage(replyToken, "ไม่พบข้อมูลสมาชิกของคุณในระบบค่ะ");
+        const noMemberMsg = "ไม่พบข้อมูลสมาชิกของคุณค่ะ สนใจสมัครสมาชิกไหมคะ?";
+        replyMessage(replyToken, noMemberMsg);
+        saveLog({ userId, displayName: profile.displayName, userMessage, botReply: noMemberMsg, intent: intentName });
       }
-    } else {
-      // ส่งคำตอบทั่วไปจาก Dialogflow
+      return;
+    }
+
+    // กรณีที่ 2: มี Custom Payload จาก Dialogflow (เช่น Flex Message สมัครสมาชิก)
+    if (hasPayload) {
+      const lineMessages = queryResult.fulfillmentMessages
+        .filter(m => m.payload && m.payload.line)
+        .map(m => m.payload.line);
+      
+      if (lineMessages.length > 0) {
+        replyMessage(replyToken, lineMessages);
+        saveLog({ userId, displayName: profile.displayName, userMessage, botReply: "Flex Message Sent", intent: intentName });
+        return;
+      }
+    }
+
+    // กรณีที่ 3: ส่งข้อความ Text ธรรมดาจาก Dialogflow
+    if (fulfillmentText) {
       replyMessage(replyToken, fulfillmentText);
       saveLog({ userId, displayName: profile.displayName, userMessage, botReply: fulfillmentText, intent: intentName });
     }
 
   } catch (error) {
     console.error("❌ Error in handleMessageEvent:", error);
-    if (replyToken) {
-      replyMessage(replyToken, "ขออภัยค่ะ ระบบขัดข้องชั่วคราว");
-    }
   }
 }
 
 /**
- * จัดการเมื่อมีการเพิ่มเพื่อน (ตัดส่วนการส่งข้อความออก)
+ * 👤 จัดการเมื่อมีการเพิ่มเพื่อน (Follow)
  */
 function handleFollowEvent(event) {
   const userId = event.source.userId;
   const profile = getUserProfile(userId);
   const timestamp = new Date(event.timestamp);
 
-  // 1. บันทึกข้อมูลผู้ติดตามลง Google Sheets เท่านั้น
   upsertFollower({
     userId: userId,
     displayName: profile.displayName,
@@ -122,7 +129,13 @@ function handleFollowEvent(event) {
     status: 'active',
     sourceChannel: 'LINE'
   });
+  console.log("👤 New Follower saved: " + profile.displayName);
+}
 
-  // 2. ส่วนการส่ง welcomeMsg และ replyMessage ถูกตัดออกตามเงื่อนไข
-  console.log("👤 New Follower: " + profile.displayName + " (Data saved to sheet)");
+/**
+ * 🚫 จัดการเมื่อผู้ใช้บล็อกบอท (Unfollow)
+ */
+function handleUnfollowEvent(event) {
+  const userId = event.source.userId;
+  updateFollowerStatus(userId, "blocked");
 }

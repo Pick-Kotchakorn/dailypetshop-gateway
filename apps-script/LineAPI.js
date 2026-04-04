@@ -11,7 +11,7 @@ function sendLoadingAnimation(userId) {
   try {
     const url = "https://api.line.me/v2/bot/chat/loading/start";
     // ปรับเวลาเป็น 20 วินาที เพื่อความเสถียรในการแสดงผล
-    const payload = { "chatId": userId, "loadingSeconds": 20 }; 
+    const payload = { "chatId": userId, "loadingSeconds": 10 }; 
     callLineApi(url, "post", payload);
   } catch (e) {
     console.error("❌ Loading Animation Error: " + e.message);

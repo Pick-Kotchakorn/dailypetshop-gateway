@@ -1,10 +1,73 @@
 /**
  * 🐾 MEMBERSHIP.gs
- * จัดการตรรกะเกี่ยวกับสมาชิก แต้มสะสม และสัตว์เลี้ยง
+ * จัดการตรรกะเกี่ยวกับสมาชิก แต้มสะสม และการลงทะเบียน
  */
 
 /**
- * ดึงข้อมูลโปรไฟล์และคำนวณค่าต่างๆ เพื่อแสดงผลบนหน้า Card
+ * 🆕 ฟังก์ชันลงทะเบียนสมาชิกใหม่ (ปรับปรุงตามโครงสร้าง Sheet1 ล่าสุด)
+ */
+function registerNewMember(formData) {
+  const lock = LockService.getScriptLock();
+  try {
+    // 🔐 ล็อกระบบ 10 วินาที ป้องกันแถวทับกัน
+    lock.waitLock(10000); 
+
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
+    
+    if (!sheet) throw new Error("ไม่พบชีทระบบสมาชิก (Sheet1)");
+
+    const data = sheet.getDataRange().getValues();
+    const userId = formData.userId;
+
+    // 1. ตรวจสอบการสมัครซ้ำ
+    const isDuplicate = data.some(row => row[0] && row[0].toString() === userId.toString());
+    if (isDuplicate) throw new Error("คุณได้ลงทะเบียนสมาชิกเรียบร้อยแล้วค่ะ");
+
+    // 2. เตรียมข้อมูล 25 คอลัมน์ ตามลำดับที่คุณระบุ
+    const now = new Date();
+    const newRow = [
+      userId,                   // Customer ID
+      "สมัครสมาชิกใหม่",           // Remark
+      0,                        // Available Coupon
+      50,                       // Current Points (ให้ 50 แต้มแรกเข้า)
+      0,                        // Expiring Points
+      now,                      // Member Since
+      "",                       // Member Until
+      "LIFF Registration",      // Added From
+      now,                      // Last Access
+      1,                        // Total Visits
+      50,                       // Lifetime Points
+      0,                        // Total Spending
+      0,                        // Avg Spending
+      0,                        // Balance (เงิน)
+      formData.fullName,        // Full Name
+      formData.lineName,        // LINE Name
+      "PET-" + userId.substring(1, 6), // Username (Gen เบื้องต้น)
+      formData.gender,          // Gender
+      formData.email,           // Email
+      formData.tel,             // Tel
+      formData.birthday,        // Birthday
+      formData.address,         // Address
+      "Friend",                 // Level
+      "-",                      // Plastic Card
+      ""                        // Referrer
+    ];
+
+    // 3. บันทึกลง Sheet
+    sheet.appendRow(newRow);
+    
+    return { status: "success", message: "ลงทะเบียนสำเร็จ" };
+
+  } catch (e) {
+    throw new Error(e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * ดึงข้อมูลโปรไฟล์เพื่อแสดงผลบนหน้า Card
  */
 function getCustomerProfile(customerId) {
   try {
@@ -23,14 +86,14 @@ function getCustomerProfile(customerId) {
 
     return {
       name: getValue('Full Name'),
-      memberId: getValue('Username'), // หรือใช้รหัส Plastic Card ตามต้องการ
-      level: getValue('Level') || "Friend", // ปรับชื่อ Level ให้เหมือนตัวอย่าง
+      memberId: getValue('Username') || "PET-" + customerId.substring(1, 6),
+      level: getValue('Level') || "Friend",
       points: Number(getValue('Current Points')) || 0,
-      pointsExpiring: getValue('Expiring Points'), // 🆕 เพิ่มข้อมูลวันหมดอายุคะแนน
-      expiringDate: formatSimpleDate(getValue('Member Until')), // 🆕 วันที่คะแนนจะหมดอายุ
+      pointsExpiring: getValue('Expiring Points') || 0,
+      expiringDate: formatSimpleDate(getValue('Member Until')),
       totalSpending: Number(getValue('Total Spending')) || 0,
-      nextLevelTarget: 5000, // ตัวอย่าง: ยอดสะสมที่ต้องถึงเพื่อปรับระดับถัดไป
-      couponCount: Number(getValue('Available Coupon')) || 0 // 🆕 จำนวนคูปองที่มี
+      nextLevelTarget: 5000,
+      couponCount: Number(getValue('Available Coupon')) || 0
     };
   } catch (e) {
     console.error("❌ Error: " + e.message);
@@ -39,56 +102,9 @@ function getCustomerProfile(customerId) {
 }
 
 /**
- * ฟังก์ชันคำนวณระยะเวลาการเป็นสมาชิก
- */
-function calculateDuration(startDate) {
-  if (!(startDate instanceof Date) || isNaN(startDate.getTime())) {
-    return "New Member";
-  }
-  const now = new Date();
-  const diffTime = Math.abs(now - startDate);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diffDays < 30) return diffDays + " วัน";
-  
-  const months = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
-  if (months < 12) return months + " เดือน";
-  
-  const years = Math.floor(months / 12);
-  const remainingMonths = months % 12;
-  return `${years} ปี ${remainingMonths} เดือน`;
-}
-
-/**
- * Helper: จัดรูปแบบวันที่ให้ดูง่าย (DD/MM/YYYY)
+ * Helper: จัดรูปแบบวันที่ (DD/MM/YYYY)
  */
 function formatSimpleDate(date) {
-  if (!(date instanceof Date) || isNaN(date.getTime())) return date || "-";
+  if (!(date instanceof Date) || isNaN(date.getTime())) return "-";
   return Utilities.formatDate(date, "GMT+7", "dd/MM/yyyy");
-}
-
-/**
- * 🍖 ฟังก์ชันประมวลผลการให้อาหารสัตว์เลี้ยง
- */
-function processFeed(userId) {
-  try {
-    const profileData = getCustomerProfile(userId);
-    if (!profileData) return { status: "error", message: "ไม่พบข้อมูลสมาชิก" };
-
-    const points = profileData.membership.currentPoints;
-    if (points < 5) {
-      return { status: "error", message: "แต้มไม่พอ! สะสมยอดซื้อเพิ่มอีกนิดนะ 🐾" };
-    }
-
-    // [TODO]: เพิ่ม Logic การหักแต้มจริงใน Sheet ที่นี่
-    // เช่น updateSpending หรือลด Current Points ลง
-    
-    return { 
-      status: "success", 
-      message: "หม่ำๆ! ขอบคุณสำหรับอาหารครับ 🍖 (XP +1)",
-      newData: getCustomerProfile(userId) 
-    };
-  } catch (e) {
-    return { status: "error", message: e.message };
-  }
 }

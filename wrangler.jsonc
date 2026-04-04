@@ -4,5 +4,9 @@
   "main": "src/index.js",
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "GAS_ENDPOINT": "https://script.google.com/macros/s/AKfycbz_kElS6ZfO9CazuBHPL5jz6F_TZMHagzFVoRybcgfh-qgqkdDaIDs-9alUE0-oUKNm/exec",
+    "ENABLE_DEBUG": "false"
   }
 }

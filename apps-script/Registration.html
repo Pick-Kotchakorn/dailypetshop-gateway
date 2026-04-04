@@ -47,9 +47,11 @@
       cursor: pointer; margin-top: 20px;
     }
 
+    .btn-submit:disabled { background-color: #ccc; cursor: not-allowed; }
+
     #loading-overlay {
       position: fixed; top:0; left:0; width:100%; height:100%;
-      background: rgba(255, 255, 255, 0.95); display: flex; flex-direction: column; 
+      background: rgba(255, 255, 255, 0.95); display: none; flex-direction: column; 
       justify-content: center; align-items: center; z-index: 1000;
     }
   </style>
@@ -58,7 +60,7 @@
 
   <div id="loading-overlay">
     <img src="https://cdn-icons-png.flaticon.com/512/616/616408.png" width="60" style="filter: hue-rotate(330deg); margin-bottom: 15px;">
-    <p style="color: var(--primary-color); font-weight: 500;">กำลังดึงข้อมูลโปรไฟล์...</p>
+    <p id="loading-text" style="color: var(--primary-color); font-weight: 500;">กำลังประมวลผล...</p>
   </div>
 
   <div class="form-container">
@@ -73,18 +75,18 @@
 
       <div class="input-group">
         <label>ชื่อ-นามสกุล</label>
-        <input type="text" name="fullName" placeholder="กรอกชื่อจริง-นามสกุล" required>
+        <input type="text" id="fullName" name="fullName" placeholder="กรอกชื่อจริง-นามสกุล" required>
       </div>
 
       <div class="input-group">
         <label>อีเมล (Email)</label>
-        <input type="email" name="email" placeholder="example@email.com" required>
+        <input type="email" id="email" name="email" placeholder="example@email.com" required>
       </div>
 
       <div class="row" style="display: flex; gap: 10px;">
         <div class="input-group" style="flex: 1;">
           <label>เพศ</label>
-          <select name="gender" required>
+          <select id="gender" name="gender" required>
             <option value="">เลือก</option>
             <option value="ชาย">ชาย</option>
             <option value="หญิง">หญิง</option>
@@ -92,13 +94,13 @@
         </div>
         <div class="input-group" style="flex: 1;">
           <label>วันเกิด</label>
-          <input type="date" name="birthday" required>
+          <input type="date" id="birthday" name="birthday" required>
         </div>
       </div>
 
       <div class="input-group">
         <label>เบอร์โทรศัพท์</label>
-        <input type="tel" name="tel" pattern="[0-9]{9,10}" placeholder="08XXXXXXXX" required>
+        <input type="tel" id="tel" name="tel" pattern="[0-9]{9,10}" placeholder="08XXXXXXXX" required>
       </div>
 
       <hr style="border: 0.5px solid #f0f0f0; margin: 25px 0;">
@@ -109,10 +111,10 @@
       <div class="input-group"><input type="text" id="province" name="province" placeholder="จังหวัด" required></div>
       <div class="input-group"><input type="text" id="zipcode" name="zipcode" placeholder="รหัสไปรษณีย์" required></div>
       <div class="input-group">
-        <textarea name="addr_detail" rows="2" placeholder="บ้านเลขที่, หมู่บ้าน, ซอย, ถนน" required></textarea>
+        <textarea id="addr_detail" name="addr_detail" rows="2" placeholder="บ้านเลขที่, หมู่บ้าน, ซอย, ถนน" required></textarea>
       </div>
 
-      <button type="submit" class="btn-submit">ยืนยันการสมัครสมาชิก</button>
+      <button type="submit" id="submitBtn" class="btn-submit">ยืนยันการสมัครสมาชิก</button>
     </form>
   </div>
 
@@ -122,9 +124,16 @@
   <script type="text/javascript" src="https://earthchie.github.io/jquery.Thailand.js/jquery.Thailand.js/dist/jquery.Thailand.min.js"></script>
 
   <script>
+    // เริ่มทำงานเมื่อเปิดหน้าเว็บ
     async function main() {
+      const overlay = document.getElementById('loading-overlay');
+      const loadingText = document.getElementById('loading-text');
+      
       try {
-        await liff.init({ liffId: "2009630242-iPO8WjV7" }); // ใส่ LIFF ID ของคุณ
+        overlay.style.display = 'flex';
+        loadingText.innerText = "กำลังดึงข้อมูลโปรไฟล์...";
+
+        await liff.init({ liffId: "2009630242-iPO8WjV7" });
         if (!liff.isLoggedIn()) {
           liff.login();
           return;
@@ -132,9 +141,11 @@
         const profile = await liff.getProfile();
         document.getElementById('userId').value = profile.userId;
         document.getElementById('lineName').value = profile.displayName;
-        document.getElementById('loading-overlay').style.display = 'none';
+        overlay.style.display = 'none';
       } catch (err) {
-        console.error(err);
+        console.error("LIFF Error:", err);
+        alert("ไม่สามารถดึงข้อมูลโปรไฟล์ได้ กรุณาลองเปิดใหม่อีกครั้ง");
+        overlay.style.display = 'none';
       }
     }
 
@@ -150,12 +161,19 @@
 
     document.getElementById('regForm').onsubmit = function(e) {
       e.preventDefault();
-      const btn = document.querySelector('.btn-submit');
-      btn.innerText = "กำลังบันทึก...";
+      
+      const btn = document.getElementById('submitBtn');
+      const overlay = document.getElementById('loading-overlay');
+      const loadingText = document.getElementById('loading-text');
+      
       btn.disabled = true;
+      loadingText.innerText = "กำลังบันทึกข้อมูลสมาชิก...";
+      overlay.style.display = 'flex';
 
       const f = this;
-      const fullAddress = `${f.addr_detail.value} ต.${f.district.value} อ.${f.amphoe.value} จ.${f.province.value} ${f.zipcode.value}`;
+      
+      // ✅ 1. ปรับปรุงลำดับการรวมที่อยู่ (ใช้เว้นวรรคเพื่อความยืดหยุ่น ต./แขวง หรือ อ./เขต)
+      const fullAddress = `${f.addr_detail.value} ${f.district.value} ${f.amphoe.value} ${f.province.value} ${f.zipcode.value}`;
 
       const formData = {
         userId: f.userId.value,
@@ -164,14 +182,20 @@
         email: f.email.value,
         gender: f.gender.value,
         tel: f.tel.value,
-        birthday: f.birthday.value,
+        birthday: f.birthday.value, // ✅ 2. ส่งฟอร์แมต YYYY-MM-DD
         address: fullAddress
       };
 
       google.script.run
-        .withSuccessHandler(function() {
-          alert("ลงทะเบียนสำเร็จ!");
-          liff.closeWindow(); // ปรับให้ปิดหน้าต่างเพื่อให้ User กลับไปกดเมนูใหม่ หรือใช้ window.location.reload();
+        .withSuccessHandler(function(response) {
+          overlay.style.display = 'none';
+          alert("ยินดีต้อนรับคุณ " + formData.fullName + " เข้าสู่ครอบครัว Daily Pet Shop ค่ะ! 🐾");
+          liff.closeWindow();
+        })
+        .withFailureHandler(function(err) {
+          overlay.style.display = 'none';
+          btn.disabled = false;
+          alert("เกิดข้อผิดพลาด: " + err.message);
         })
         .registerNewMember(formData);
     };

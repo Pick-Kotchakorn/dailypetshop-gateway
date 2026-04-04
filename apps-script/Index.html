@@ -9,10 +9,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --dps-main: #c54327;      /* สีหลักจาก CI */
-      --dps-secondary: #f2e2c0; /* สีรองจาก CI */
-      --dps-accent: #faaf73;    /* สีส้มอ่อนจาก Palette */
-      --dps-green: #305640;     /* สีเขียวเข้มจาก Palette */
+      --dps-main: #c54327;
+      --dps-secondary: #f2e2c0;
+      --dps-accent: #faaf73;
       --white: #ffffff;
       --text-dark: #4A3F35;
     }
@@ -21,76 +20,41 @@
       font-family: 'Kanit', sans-serif;
       background-color: var(--dps-secondary);
       color: var(--text-dark);
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
+      margin: 0; padding: 0;
+      display: flex; flex-direction: column; align-items: center; min-height: 100vh;
     }
 
-    /* 🏷️ Header Card Section */
+    /* ส่วนหัวของบัตร */
     .header-card {
       background: var(--dps-main);
-      width: 90%;
-      max-width: 400px;
+      width: 90%; max-width: 400px;
       border-radius: 20px 20px 0 0;
-      padding: 25px 20px;
-      margin-top: 20px;
-      color: white;
-      box-shadow: 0 4px 15px rgba(197, 67, 39, 0.2);
-      position: relative;
+      padding: 25px 20px; margin-top: 20px;
+      color: white; box-shadow: 0 4px 15px rgba(197, 67, 39, 0.2);
     }
 
     .level-info { display: flex; justify-content: space-between; align-items: center; }
-    .level-name { font-size: 1.5rem; font-weight: 600; letter-spacing: 1px; }
-    .benefit-link { font-size: 0.8rem; text-decoration: none; color: white; opacity: 0.9; }
+    .level-name { font-size: 1.5rem; font-weight: 600; }
 
     .progress-container { background: rgba(255,255,255,0.2); height: 10px; border-radius: 5px; margin: 15px 0 10px 0; }
-    .progress-bar { background: var(--dps-accent); height: 100%; border-radius: 5px; transition: width 1s ease-in-out; }
+    .progress-bar { background: var(--dps-accent); height: 100%; border-radius: 5px; width: 0%; transition: width 1s; }
 
-    /* 🪪 Main Body Container */
+    /* ส่วนเนื้อหาหลัก */
     .main-container {
       background: var(--white);
-      width: 90%;
-      max-width: 400px;
+      width: 90%; max-width: 400px;
       border-radius: 0 0 20px 20px;
-      padding: 30px 20px;
-      box-sizing: border-box;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-      text-align: center;
+      padding: 30px 20px; box-sizing: border-box;
+      text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05);
     }
 
-    .qr-box img { 
-      width: 160px; 
-      padding: 10px; 
-      border: 1px solid #eee; 
-      border-radius: 15px; 
-      margin-bottom: 15px; 
-    }
-    
-    .user-name { font-size: 1.3rem; font-weight: 600; color: var(--dps-main); margin: 5px 0; }
-    .member-id { font-size: 0.9rem; color: #888; margin-bottom: 25px; }
-
+    .user-name { font-size: 1.3rem; font-weight: 600; color: var(--dps-main); }
     .points-section { 
-      background-color: #fff9f5; 
-      border-radius: 15px; 
-      padding: 20px; 
-      border: 1px dashed var(--dps-accent); 
+      background-color: #fff9f5; border-radius: 15px; 
+      padding: 20px; border: 1px dashed var(--dps-accent); margin-top: 20px;
     }
-    .points-value { font-size: 2.5rem; font-weight: 700; color: var(--dps-main); line-height: 1; }
-    .points-label { font-size: 1rem; color: var(--text-dark); }
-    .points-expiring { font-size: 0.85rem; color: #888; margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px; }
+    .points-value { font-size: 2.5rem; font-weight: 700; color: var(--dps-main); }
 
-    /* 🎫 Tab & Coupon */
-    .tab-menu { display: flex; width: 90%; max-width: 400px; margin-top: 25px; gap: 10px; }
-    .tab-item { 
-      flex: 1; text-align: center; padding: 12px; font-weight: 500; 
-      border-radius: 10px 10px 0 0; background: rgba(255,255,255,0.5); color: #888; 
-    }
-    .tab-item.active { background: var(--white); color: var(--dps-main); border-bottom: 3px solid var(--dps-main); }
-
-    /* ⏳ Loading */
     #loading-screen {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: var(--dps-secondary); display: flex; flex-direction: column;
@@ -101,95 +65,67 @@
 <body>
 
   <div id="loading-screen">
-    <img src="https://cdn-icons-png.flaticon.com/512/616/616408.png" width="80" style="filter: hue-rotate(330deg);">
-    <p style="color: var(--dps-main); font-weight: 500;">🐾 กำลังดึงข้อมูลสมาชิก...</p>
+    <p>🐾 กำลังดึงข้อมูลสมาชิก...</p>
   </div>
 
   <div class="header-card">
     <div class="level-info">
       <span class="level-name" id="display-level">Loading...</span>
-      <span class="benefit-link">สิทธิประโยชน์ ></span>
     </div>
     <div class="progress-container">
-      <div class="progress-bar" id="level-progress" style="width: 0%"></div>
+      <div id="progress-bar" class="progress-bar"></div>
     </div>
-    <div id="next-level-text" style="font-size: 0.75rem; opacity: 0.9;">สะสมยอดซื้อเพื่อปรับระดับ</div>
   </div>
 
   <div class="main-container">
-    <div class="qr-box">
-      <img id="member-qr" src="" alt="Member QR">
-    </div>
     <div class="user-name" id="display-name">...</div>
-    <div class="member-id">ID: <span id="display-id">...</span></div>
-
     <div class="points-section">
       <div class="points-value" id="display-points">0</div>
-      <div class="points-label">คะแนนสะสม</div>
-      <div class="points-expiring" id="display-expiring">ไม่มีคะแนนหมดอายุ</div>
+      <div>คะแนนสะสม</div>
     </div>
-  </div>
-
-  <div class="tab-menu">
-    <div class="tab-item active">คูปองของฉัน</div>
-    <div class="tab-item">แลกแต้ม</div>
   </div>
 
   <script>
-  async function main() {
-    console.log("🚀 LIFF Starting...");
-    try {
-      // 1. ตรวจสอบการ Init
-      await liff.init({ liffId: "2009630242-iPO8WjV7" });
-      console.log("✅ LIFF Initialized");
-
-      if (!liff.isLoggedIn()) {
-        console.log("🔑 Not Logged In, Redirecting...");
-        liff.login();
-        return;
-      }
-
-      const profile = await liff.getProfile();
-      console.log("👤 Profile Loaded:", profile.userId);
-      loadData(profile.userId);
-
-    } catch (err) {
-      console.error("❌ LIFF Error:", err);
-      document.getElementById('loading-screen').innerHTML = `
-        <div style="padding:20px;">
-          <p>❌ เกิดข้อผิดพลาดในการเชื่อมต่อ LINE</p>
-          <small style="color:red;">${err.message}</small>
-          <button onclick="location.reload()" style="margin-top:10px; padding:10px; border-radius:10px;">ลองใหม่อีกครั้ง</button>
-        </div>
-      `;
-    }
-  }
-
-  function loadData(userId) {
-    console.log("📡 Fetching Member Data for:", userId);
-    google.script.run
-      .withSuccessHandler(function(data) {
-        console.log("📦 Data Received:", data);
-        if (!data) {
-          console.log("⚠️ No Member Data, showing Registration...");
-          // แทนที่จะ Redirect URL ยาวๆ ให้ใช้คำสั่งเปิด LIFF ไปหน้าสมัคร (ถ้าแยกไฟล์) 
-          // หรือเปลี่ยนหน้าด้วยการซ่อน/แสดง Div แทน (วิธีนี้เสถียรกว่ามาก)
-          window.location.href = liff.getSourceInfo().endpointUrl + "?userId=" + userId;
+    async function main() {
+      try {
+        await liff.init({ liffId: "2009630242-iPO8WjV7" });
+        if (!liff.isLoggedIn()) {
+          liff.login();
           return;
         }
-        renderUI(data);
-      })
-      .withFailureHandler(function(err) {
-        console.error("🔌 GAS Error:", err);
-        document.getElementById('loading-screen').innerHTML = `
-          <p>❌ ไม่สามารถติดต่อฐานข้อมูลได้</p>
-          <small>${err.message}</small>
-        `;
-      })
-      .getCustomerProfile(userId);
-  }
+        const profile = await liff.getProfile();
+        loadMemberData(profile.userId);
+      } catch (err) {
+        console.error(err);
+      }
+    }
 
-  window.onload = main;
-</script>
+    function loadMemberData(userId) {
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (!data) {
+            // ถ้าไม่พบข้อมูลสมาชิก ให้ส่งไปหน้าลงทะเบียน
+            window.location.href = "https://script.google.com/macros/s/AKfycbz_kElS6ZfO9CazuBHPL5jz6F_TZMHagzFVoRybcgfh-qgqkdDaIDs-9alUE0-oUKNm/exec?page=registration";
+            return;
+          }
+          renderUI(data);
+        })
+        .getCustomerProfile(userId);
+    }
+
+    function renderUI(data) {
+      document.getElementById('display-name').innerText = data.name;
+      document.getElementById('display-level').innerText = data.level;
+      document.getElementById('display-points').innerText = data.points.toLocaleString();
+      
+      // คำนวณ Progress Bar (ตัวอย่าง: เต็มที่ 5,000 แต้ม)
+      const percent = Math.min((data.points / 5000) * 100, 100);
+      document.getElementById('progress-bar').style.width = percent + "%";
+      
+      document.getElementById('loading-screen').style.display = 'none';
+    }
+
+    main();
+  </script>
 </body>
 </html>
