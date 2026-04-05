@@ -1,116 +1,175 @@
 /**
- * 🐾 MEMBERSHIP.gs
- * จัดการตรรกะเกี่ยวกับสมาชิก แต้มสะสม และการลงทะเบียน
+ * 👥 Membership.js - จัดการระบบสมาชิกและแต้มสะสม
+ * จัดการการสมัครสมาชิกใหม่ และการคำนวณแต้มจากการซื้อสินค้า
  */
 
 /**
- * 🆕 ฟังก์ชันลงทะเบียนสมาชิกใหม่ (รับข้อมูลจาก Registration.html)
+ * 📊 รับข้อมูลโปรไฟล์สมาชิก
+ * @param {string} userId - รหัสผู้ใช้ LINE
+ * @returns {object|null} ข้อมูลสมาชิก หรือ null ถ้าไม่พบ
+ */
+function getCustomerProfile(userId) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
+  const values = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < values.length; i++) {
+    if (values[i][0] && values[i][0].toString() === userId.toString()) {
+      const data = values[i];
+      return {
+        userId: data[0],
+        name: data[1] || '',
+        points: Number(data[2]) || 0,
+        totalSpending: Number(data[3]) || 0,
+        level: data[4] || 'Bronze',
+        memberSince: data[5] ? new Date(data[5]).toLocaleDateString('th-TH') : '',
+        lastAccess: data[6] ? new Date(data[6]).toLocaleDateString('th-TH') : '',
+        totalVisits: Number(data[7]) || 0,
+        lifetimePoints: Number(data[8]) || 0
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * 📝 สมัครสมาชิกใหม่ (เวอร์ชันอัปเกรดเก็บข้อมูลละเอียด)
+ * บันทึกลงชีท Membership
  */
 function registerNewMember(formData) {
   const lock = LockService.getScriptLock();
   try {
-    // 🔐 ล็อกระบบ 10 วินาที ป้องกันการสมัครพร้อมกันจนแถวทับกัน
     lock.waitLock(10000); 
-
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-    
+    let sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
+
+    // 1. ถ้าไม่มีชีท ให้สร้างพร้อมหัวข้อตามไฟล์ตัวอย่างที่คุณต้องการ
     if (!sheet) {
-      throw new Error("ไม่พบชีทระบบสมาชิก (Sheet1)");
+      sheet = ss.insertSheet(CONFIG.SHEET_NAME.MEMBERS);
+      const headers = [
+        'LINE User ID', 'LINE Name', 'First name', 'Last name', 'Tel', 
+        'Birthday', 'Gender', 'Address', 'Subscribed Date', 'Status', 
+        'Level', 'Current points', 'Total spending', 'Last access'
+      ];
+      sheet.appendRow(headers);
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f3f3f3");
     }
 
+    // 2. ตรวจสอบสมาชิกซ้ำ
     const data = sheet.getDataRange().getValues();
-    const userId = formData.userId;
+    const exists = data.some(row => row[0] === formData.userId);
+    if (exists) return "คุณเป็นสมาชิกอยู่แล้วค่ะ";
 
-    // 1. ตรวจสอบว่ามี User ID นี้ในระบบสมาชิกหรือยัง (ป้องกันสมัครซ้ำ)
-    const isDuplicate = data.some(row => row[0] && row[0].toString() === userId.toString());
-    if (isDuplicate) {
-      throw new Error("คุณได้ลงทะเบียนสมาชิกเรียบร้อยแล้วค่ะ");
-    }
+    // 3. เตรียมที่อยู่แบบรวมข้อความ (Concatenate Address)
+    const fullAddress = `${formData.addressDetail} ต.${formData.district} อ.${formData.amphure} จ.${formData.province}`;
 
-    // 2. เตรียมข้อมูลให้ตรงตามโครงสร้าง Header ใน Sheet ของคุณ
-    // ลำดับ: Customer ID, Remark, Available Coupon, Current Points, ..., Full Name, LINE Name, Email, Tel, Birthday, Address, ...
+    // 4. บันทึกข้อมูล
     const newRow = [
-      userId,                   // Customer ID (A)
-      "ลงทะเบียนผ่านระบบ",         // Remark (B)
-      0,                        // Available Coupon (C)
-      0,                        // Current Points (D)
-      0,                        // Expiring Points (E)
-      new Date(),               // Member Since (F)
-      "",                       // Member Until (G)
-      "LINE LIFF",              // Added From (H)
-      new Date(),               // Last Access (I)
-      1,                        // Total Visits (J)
-      0,                        // Lifetime Points (K)
-      0,                        // Total Spending (L)
-      0,                        // Avg Spending (M)
-      0,                        // Balance (N)
-      formData.fullName,        // Full Name (O)
-      formData.lineName,        // LINE Name (P)
-      "",                       // Username (Q)
-      formData.gender,          // Gender (R)
-      formData.email,           // Email (S)
-      formData.tel,             // Tel (T)
-      formData.birthday,        // Birthday (U)
-      formData.address,         // Address (V)
-      "Friend",                 // Level (W)
-      "",                       // Plastic Card (X)
-      ""                        // Referrer (Y)
+      formData.userId,        // LINE User ID
+      formData.displayName,   // LINE Name
+      formData.firstName,     // First name
+      formData.lastName,      // Last name
+      formData.phone,         // Tel
+      formData.birthday,      // Birthday
+      formData.gender,        // Gender
+      fullAddress,            // Address
+      new Date(),             // Subscribed Date
+      'Active',               // Status
+      'Bronze',               // Level
+      50,                     // Current points (แต้มฟรี)
+      0,                      // Total spending
+      new Date()              // Last access
     ];
 
-    // 3. บันทึกข้อมูลลงบรรทัดใหม่
     sheet.appendRow(newRow);
-    
-    return { status: "success", message: "บันทึกข้อมูลเรียบร้อย" };
+    return "Success";
 
-  } catch (error) {
-    console.error("❌ Registration Error: " + error.message);
-    throw new Error(error.message); // ส่ง Error กลับไปที่หน้า HTML เพื่อแจ้งเตือน User
+  } catch (e) {
+    return "Error: " + e.message;
   } finally {
-    // 🔓 ปล่อยล็อก
     lock.releaseLock();
   }
 }
 
 /**
- * ดึงข้อมูลโปรไฟล์เพื่อแสดงผลบนหน้า Card
+ * 💰 เพิ่มธุรกรรมการซื้อสินค้า (คำนวณแต้มอัตโนมัติ)
+ * @param {string} userId - รหัสผู้ใช้ LINE
+ * @param {number} amount - ยอดซื้อในครั้งนี้ (บาท)
+ * @returns {object} ผลลัพธ์การเพิ่มธุรกรรม
  */
-function getCustomerProfile(customerId) {
+function addTransaction(userId, amount) {
+  const lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
-    
-    const userRow = data.find(row => row[0] && row[0].toString() === customerId.toString());
-    if (!userRow) return null;
 
-    const getValue = (headerName) => {
-      const index = headers.indexOf(headerName);
-      return index > -1 ? userRow[index] : "";
-    };
+    const rowIndex = data.findIndex(row => row[0] && row[0].toString() === userId.toString());
+    if (rowIndex === -1) throw new Error("ไม่พบข้อมูลสมาชิก");
+
+    // ระบุตำแหน่ง Column ที่สำคัญ
+    const colCurrentPoints = headers.indexOf('Current Points') + 1;
+    const colLifetimePoints = headers.indexOf('Lifetime Points') + 1;
+    const colTotalSpending = headers.indexOf('Total Spending') + 1;
+    const colLevel = headers.indexOf('Level') + 1;
+    const colTotalVisits = headers.indexOf('Total Visits') + 1;
+    const colLastAccess = headers.indexOf('Last Access') + 1;
+
+    // Validate required columns
+    if (colCurrentPoints <= 0) throw new Error("Missing 'Current Points' column");
+    if (colLifetimePoints <= 0) throw new Error("Missing 'Lifetime Points' column");
+    if (colTotalSpending <= 0) throw new Error("Missing 'Total Spending' column");
+    if (colLevel <= 0) throw new Error("Missing 'Level' column");
+    if (colTotalVisits <= 0) throw new Error("Missing 'Total Visits' column");
+    if (colLastAccess <= 0) throw new Error("Missing 'Last Access' column");
+
+    // 1. ดึงข้อมูลเก่า
+    const currentData = data[rowIndex];
+    const oldSpending = Number(currentData[colTotalSpending - 1]) || 0;
+    const oldPoints = Number(currentData[colCurrentPoints - 1]) || 0;
+    const oldLifetimePoints = Number(currentData[colLifetimePoints - 1]) || 0;
+    const oldVisits = Number(currentData[colTotalVisits - 1]) || 0;
+
+    // 2. คำนวณค่าใหม่ (สูตร: 10 บาท = 1 แต้ม)
+    const newSpending = oldSpending + amount;
+    const earnedPoints = Math.floor(amount / 10); 
+    const newPoints = oldPoints + earnedPoints;
+    const newLifetimePoints = oldLifetimePoints + earnedPoints;
+    const newLevel = calculateLevel(newSpending); // คำนวณเลเวลใหม่ทันที
+
+    // 3. บันทึกลง Sheet
+    const targetRow = rowIndex + 1;
+    sheet.getRange(targetRow, colTotalSpending).setValue(newSpending);
+    sheet.getRange(targetRow, colCurrentPoints).setValue(newPoints);
+    sheet.getRange(targetRow, colLifetimePoints).setValue(newLifetimePoints);
+    sheet.getRange(targetRow, colLevel).setValue(newLevel);
+    sheet.getRange(targetRow, colTotalVisits).setValue(oldVisits + 1);
+    sheet.getRange(targetRow, colLastAccess).setValue(new Date());
 
     return {
-      name: getValue('Full Name'),
-      memberId: getValue('Username') || "PET-" + customerId.substring(1, 6),
-      level: getValue('Level') || "Friend",
-      points: Number(getValue('Current Points')) || 0,
-      pointsExpiring: getValue('Expiring Points') || 0,
-      expiringDate: formatSimpleDate(getValue('Member Until')),
-      totalSpending: Number(getValue('Total Spending')) || 0,
-      nextLevelTarget: 5000,
-      couponCount: Number(getValue('Available Coupon')) || 0
+      status: "success",
+      earnedPoints,
+      newLevel,
+      totalPoints: newPoints
     };
+
   } catch (e) {
-    console.error("❌ Error: " + e.message);
-    return null;
+    console.error("❌ addTransaction Error: " + e.message);
+    return { status: "error", message: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
 /**
- * Helper: จัดรูปแบบวันที่ (DD/MM/YYYY)
+ * 🏆 คำนวณเลเวลสมาชิกตามยอดซื้อสะสม
+ * @param {number} totalSpending - ยอดซื้อสะสมทั้งหมด
+ * @returns {string} เลเวลที่คำนวณได้
  */
-function formatSimpleDate(date) {
-  if (!(date instanceof Date) || isNaN(date.getTime())) return "-";
-  return Utilities.formatDate(date, "GMT+7", "dd/MM/yyyy");
+function calculateLevel(totalSpending) {
+  if (totalSpending >= 10000) return "Gold (VIP)";
+  if (totalSpending >= 2000) return "Silver (Member)";
+  return "Bronze";
 }

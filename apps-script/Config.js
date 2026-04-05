@@ -14,7 +14,7 @@ const CONFIG = {
   SHEET_NAME: {
     FOLLOWERS: "Followers",
     CONVERSATIONS: "Conversations",
-    MEMBERS: "Sheet1" 
+    MEMBERS: "Membership" 
   },
 
   // --- Dialogflow Settings ---
@@ -34,11 +34,8 @@ const CONFIG = {
 function validateConfig() {
   const missing = [];
   
-  if (!CONFIG.LINE_ACCESS_TOKEN) missing.push("LINE_CHANNEL_ACCESS_TOKEN");
+  // ตรวจสอบเฉพาะ ID หลัก (ไม่บังคับ Dialogflow/LINE ในตอนนี้)
   if (!CONFIG.SPREADSHEET_ID) missing.push("DB_SPREADSHEET_ID");
-  if (!CONFIG.DF_PROJECT_ID) missing.push("DF_PROJECT_ID");
-  if (!CONFIG.DF_SERVICE_ACCOUNT_EMAIL) missing.push("DF_SERVICE_ACCOUNT_EMAIL");
-  if (!CONFIG.DF_PRIVATE_KEY) missing.push("DF_PRIVATE_KEY");
 
   if (missing.length > 0) {
     const errorMsg = "❌ Missing Script Properties: " + missing.join(", ");
