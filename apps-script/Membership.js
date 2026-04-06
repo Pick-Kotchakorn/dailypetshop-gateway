@@ -1,35 +1,35 @@
 /**
- * 👥 Membership.js - จัดการระบบสมาชิกและแต้มสะสม
- * จัดการการสมัครสมาชิกใหม่ และการคำนวณแต้มจากการซื้อสินค้า
- */
-
-/**
- * 📊 รับข้อมูลโปรไฟล์สมาชิก
- * @param {string} userId - รหัสผู้ใช้ LINE
- * @returns {object|null} ข้อมูลสมาชิก หรือ null ถ้าไม่พบ
+ * 👤 ฟังก์ชันสำหรับดึงข้อมูลสมาชิกมาโชว์บนหน้าบัตรสมาชิก (Index.html)
+ * @param {string} userId - ID ของผู้ใช้ LINE
  */
 function getCustomerProfile(userId) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
-  const values = sheet.getDataRange().getValues();
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
+    const data = sheet.getDataRange().getValues();
+    
+    // 1. ค้นหาแถวของลูกค้าโดยใช้ User ID (เช็คที่คอลัมน์ A หรือ index 0)
+    const rowIndex = data.findIndex(row => row[0] && row[0].toString() === userId.toString());
+    
+    // ถ้าไม่พบข้อมูลสมาชิก
+    if (rowIndex === -1) return null;
 
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][0] && values[i][0].toString() === userId.toString()) {
-      const data = values[i];
-      return {
-        userId: data[0],
-        name: data[1] || '',
-        points: Number(data[2]) || 0,
-        totalSpending: Number(data[3]) || 0,
-        level: data[4] || 'Bronze',
-        memberSince: data[5] ? new Date(data[5]).toLocaleDateString('th-TH') : '',
-        lastAccess: data[6] ? new Date(data[6]).toLocaleDateString('th-TH') : '',
-        totalVisits: Number(data[7]) || 0,
-        lifetimePoints: Number(data[8]) || 0
-      };
-    }
+    const rowData = data[rowIndex];
+
+    // 2. ส่งค่ากลับไปที่หน้าจอโทรศัพท์ (ดึงตามลำดับ index ที่เราตั้งไว้ 0-24)
+    return {
+      name: rowData[14] || rowData[15] || "สมาชิก", // ดึงจาก Full Name (O) หรือ LINE Name (P)
+      level: rowData[22] || "Bronze Friend",      // ดึงจาก Level (V)
+      points: Number(rowData[3]) || 0,            // ดึงจาก Current Points (D)
+      lifetimePoints: Number(rowData[10]) || 0,   // ดึงจาก Lifetime Points (K)
+      memberSince: formatSimpleDate(rowData[5]),  // ดึงจาก Member Since (F)
+      couponCount: Number(rowData[2]) || 0        // ดึงจาก Available Coupon (C)
+    };
+    
+  } catch (e) {
+    console.error("❌ getCustomerProfile Error: " + e.message);
+    return null;
   }
-  return null;
 }
 
 /**
@@ -43,44 +43,48 @@ function registerNewMember(formData) {
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     let sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
 
-    // 1. ถ้าไม่มีชีท ให้สร้างพร้อมหัวข้อตามไฟล์ตัวอย่างที่คุณต้องการ
+    // 1. 🌟 ส่วนที่เพิ่มเข้ามา: ถ้าไม่มีชีท ให้สร้างใหม่พร้อมหัวข้อ A-Y
     if (!sheet) {
       sheet = ss.insertSheet(CONFIG.SHEET_NAME.MEMBERS);
       const headers = [
-        'LINE User ID', 'LINE Name', 'First name', 'Last name', 'Tel', 
-        'Birthday', 'Gender', 'Address', 'Subscribed Date', 'Status', 
-        'Level', 'Current points', 'Total spending', 'Last access'
+        'Customer ID', 'Remark', 'Available Coupon', 'Current Points', 'Expiring Points', 
+        'Member Since', 'Member Until', 'Added From', 'Last Access', 'Total Visits', 
+        'Lifetime Points', 'Total Spending', 'Avg Spending', 'Balance', 'Full Name', 
+        'LINE Name', 'Username', 'Gender', 'Email', 'Tel', 
+        'Birthday', 'Address', 'Level', 'Plastic Card', 'Referrer'
       ];
       sheet.appendRow(headers);
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f3f3f3");
+      // ตกแต่งหัวตารางให้ดูง่าย (ตัวหนา + พื้นหลังเทา)
+      sheet.getRange(1, 1, 1, 25).setFontWeight("bold").setBackground("#f3f3f3");
     }
 
-    // 2. ตรวจสอบสมาชิกซ้ำ
+    // 2. ตรวจสอบสมาชิกซ้ำ (ตามโค้ดเดิม)
     const data = sheet.getDataRange().getValues();
-    const exists = data.some(row => row[0] === formData.userId);
-    if (exists) return "คุณเป็นสมาชิกอยู่แล้วค่ะ";
+    const exists = data.some(row => row[0] && row[0].toString() === formData.userId.toString());
+    if (exists) return "คุณเป็นสมาชิกอยู่แล้วค่ะ ✨";
 
-    // 3. เตรียมที่อยู่แบบรวมข้อความ (Concatenate Address)
-    const fullAddress = `${formData.addressDetail} ต.${formData.district} อ.${formData.amphure} จ.${formData.province}`;
+    const fullAddress = `${formData.addressDetail} แขวง/ตำบล.${formData.district} เขต/อำเภอ.${formData.amphure} จังหวัด.${formData.province}`;
+
+    // 3. เตรียมแถวข้อมูล 25 ช่อง (ตามจุดที่ 1 ที่เราแก้ไป)
+    const newRow = new Array(25).fill(""); 
+    newRow[0]  = formData.userId;                             // (A)
+    newRow[1]  = "ลงทะเบียนผ่านระบบ LIFF";                      // (B)
+    newRow[3]  = 50;                                          // (D) แต้มแรกเข้า
+    newRow[5]  = new Date();                                  // (F)
+    newRow[7]  = "LINE OA";                                   // (H)
+    newRow[8]  = new Date();                                  // (I)
+    newRow[9]  = 1;                                           // (J)
+    newRow[10] = 50;                                          // (K) Lifetime Points
+    newRow[11] = 0;                                           // (L)
+    newRow[14] = formData.firstName + " " + formData.lastName; // (O)
+    newRow[15] = formData.displayName;                        // (P)
+    newRow[17] = formData.gender;                             // (R)
+    newRow[19] = formData.phone;                              // (T)
+    newRow[20] = formData.birthday;                           // (U)
+    newRow[21] = fullAddress;                                 // (W)
+    newRow[22] = calculateLevel(newRow[10]);                  // (V) เรียกฟังก์ชันจากจุดที่ 2
 
     // 4. บันทึกข้อมูล
-    const newRow = [
-      formData.userId,        // LINE User ID
-      formData.displayName,   // LINE Name
-      formData.firstName,     // First name
-      formData.lastName,      // Last name
-      formData.phone,         // Tel
-      formData.birthday,      // Birthday
-      formData.gender,        // Gender
-      fullAddress,            // Address
-      new Date(),             // Subscribed Date
-      'Active',               // Status
-      'Bronze',               // Level
-      50,                     // Current points (แต้มฟรี)
-      0,                      // Total spending
-      new Date()              // Last access
-    ];
-
     sheet.appendRow(newRow);
     return "Success";
 
@@ -88,6 +92,22 @@ function registerNewMember(formData) {
     return "Error: " + e.message;
   } finally {
     lock.releaseLock();
+  }
+}
+
+/**
+ * 🏆 ฟังก์ชันสำหรับตัดสินระดับสมาชิก (Membership Tier)
+ * @param {number} lifetimePoints - แต้มสะสมทั้งหมดที่เคยได้รับ
+ * @return {string} - ชื่อระดับสมาชิก
+ */
+function calculateLevel(lifetimePoints) {
+  // ตรวจสอบจากแต้มสูงสุดลงมา
+  if (lifetimePoints >= 2000) {
+    return "Gold Family";
+  } else if (lifetimePoints >= 500) {
+    return "Silver Member";
+  } else {
+    return "Bronze Friend";
   }
 }
 

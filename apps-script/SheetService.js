@@ -9,30 +9,13 @@
  * @returns {object|null} ข้อมูลสมาชิก หรือ null ถ้าไม่พบ
  */
 function findMemberById(userId) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  let sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
-
-  if (!sheet) {
-    console.log(`System: Sheet "${CONFIG.SHEET_NAME.FOLLOWERS}" not found. Running setup...`);
-    setupDatabase();
-    sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
-  }
-
+  const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
   const values = sheet.getDataRange().getValues();
-  let rowIndex = -1;
-
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][0] && values[i][0].toString() === userId.toString()) {
-      rowIndex = i;
-      break;
-    }
-  }
+  const rowIndex = values.findIndex(row => row[0] && row[0].toString() === userId.toString());
 
   if (rowIndex === -1) return null;
 
-  const headers = values[0];
   const data = values[rowIndex];
-
   return {
     userId: data[0],
     name: data[1] || '',
@@ -47,71 +30,110 @@ function findMemberById(userId) {
 }
 
 /**
- * 📝 เพิ่มข้อมูลสมาชิกใหม่
- * @param {object} memberData - ข้อมูลสมาชิกใหม่
+ * 💾 บันทึกหรืออัปเดตข้อมูล Follower (รองรับ 13 คอลัมน์ตามหัวข้อที่กำหนด)
  */
-function addNewMember(memberData) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
+function saveFollowerData(data) {
+  const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === data.userId);
+  const now = new Date();
 
-  if (!sheet) {
-    console.log(`System: Sheet "${CONFIG.SHEET_NAME.FOLLOWERS}" not found. Running setup...`);
-    setupDatabase();
+  if (rowIndex === -1) {
+    // กรณีเพื่อนใหม่: เพิ่มแถวใหม่ 13 คอลัมน์
+    sheet.appendRow([
+      data.userId,          // 1. User ID
+      data.displayName,     // 2. Display Name
+      data.pictureUrl,      // 3. Picture URL
+      data.language || 'th',// 4. Language
+      data.statusMessage,   // 5. Status Message
+      now,                  // 6. First Follow
+      now,                  // 7. Last Follow
+      1,                    // 8. Follow Count
+      'active',             // 9. Status
+      data.source || 'user',// 10. Source
+      '',                   // 11. Tags
+      now,                  // 12. Last Interaction
+      1                     // 13. Total Messages
+    ]);
+  } else {
+    // กรณีเคยเป็นเพื่อนแล้ว: อัปเดตข้อมูลบางส่วน (Minimal Impact)
+    const row = rowIndex + 1;
+    const currentFollowCount = Number(values[rowIndex][7]) || 0;
+    sheet.getRange(row, 2).setValue(data.displayName);   // Update Name
+    sheet.getRange(row, 7).setValue(now);                // Last Follow
+    sheet.getRange(row, 8).setValue(currentFollowCount + 1); // Follow Count +1
+    sheet.getRange(row, 9).setValue('active');           // กลับมา active
+    sheet.getRange(row, 12).setValue(now);               // Last Interaction
   }
-
-  const newRow = [
-    memberData.userId,
-    memberData.displayName,
-    50, // แต้มเริ่มต้น
-    0,  // ยอดซื้อสะสม
-    'Bronze', // เลเวลเริ่มต้น
-    new Date(), // วันที่สมัคร
-    new Date(), // Last Access
-    0,  // Total Visits
-    50  // Lifetime Points
-  ];
-
-  sheet.appendRow(newRow);
 }
 
 /**
- * 🔄 อัปเดตข้อมูล Last Access
- * @param {string} userId - รหัสผู้ใช้ LINE
+ * 🚫 อัปเดตสถานะเป็น blocked เมื่อผู้ใช้บล็อกบอท
+ */
+function updateFollowerStatus(userId, status) {
+  const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === userId);
+  
+  if (rowIndex !== -1) {
+    // คอลัมน์ที่ 9 คือ Status
+    sheet.getRange(rowIndex + 1, 9).setValue(status);
+  }
+}
+
+/**
+ * 🔄 อัปเดตข้อมูล Last Access (Behavior เดิม)
  */
 function updateLastAccess(userId) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
+  updateFollowerStatus(userId, 'active'); // ทุกครั้งที่เข้าถึง ให้มั่นใจว่าเป็น active
+  const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
   const values = sheet.getDataRange().getValues();
-
-  for (let i = 1; i < values.length; i++) {
-    if (values[i][0] && values[i][0].toString() === userId.toString()) {
-      sheet.getRange(i + 1, 7).setValue(new Date()); // Column G (Last Access)
-      break;
-    }
+  const rowIndex = values.findIndex(row => row[0] === userId);
+  
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex + 1, 7).setValue(new Date()); // Column G
   }
 }
 
 /**
- * 🏗️ ตั้งค่า Database เริ่มต้น (สร้าง Sheet และ Header)
+ * 🛠 Helper: ดึง Sheet object และจัดการกรณีไม่มี Sheet (DRY Principle)
+ */
+function getSheet(sheetName) {
+  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    setupDatabase();
+    sheet = ss.getSheetByName(sheetName);
+  }
+  return sheet;
+}
+
+/**
+ * 🏗️ ตั้งค่า Database เริ่มต้น (Minimal Impact - รักษาโครงสร้างเดิม)
  */
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
 
-  // สร้าง Sheet สำหรับสมาชิก
-  let membersSheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-  if (!membersSheet) {
-    membersSheet = ss.insertSheet(CONFIG.SHEET_NAME.MEMBERS);
-    membersSheet.appendRow([
+  // Sheet สมาชิก
+  if (!ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS)) {
+    ss.insertSheet(CONFIG.SHEET_NAME.MEMBERS).appendRow([
       'User ID', 'Name', 'Current Points', 'Lifetime Points', 'Total Spending', 'Level', 'Last Access', 'Total Visits'
     ]);
   }
 
-  // สร้าง Sheet สำหรับ Followers
-  let followersSheet = ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
-  if (!followersSheet) {
-    followersSheet = ss.insertSheet(CONFIG.SHEET_NAME.FOLLOWERS);
-    followersSheet.appendRow([
-      'User ID', 'Name', 'Current Points', 'Lifetime Points', 'Total Spending', 'Level', 'Member Since', 'Last Access', 'Total Visits'
+  // Sheet Followers (จัดหัวข้อตามที่คุณระบุ 13 หัวข้อ)
+  if (!ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS)) {
+    ss.insertSheet(CONFIG.SHEET_NAME.FOLLOWERS).appendRow([
+      'User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 
+      'First Follow', 'Last Follow', 'Follow Count', 'Status', 'Source', 
+      'Tags', 'Last Interaction', 'Total Messages'
     ]);
   }
+}
+
+/**
+ * 📝 ฟังก์ชันเดิมที่ใช้ในระบบ (รักษาไว้เพื่อไม่ให้กระทบจุดอื่น)
+ */
+function addNewMember(memberData) {
+  saveFollowerData(memberData);
 }

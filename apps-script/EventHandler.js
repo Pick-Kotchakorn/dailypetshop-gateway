@@ -117,21 +117,20 @@ function handleMessageEvent(event) {
  */
 function handleFollowEvent(event) {
   const userId = event.source.userId;
-  const profile = getUserProfile(userId);
+  const profile = getUserProfile(userId); // ฟังก์ชันเดิมที่มีอยู่เพื่อดึงชื่อ/รูปจาก LINE
   const timestamp = new Date(event.timestamp);
 
-  upsertFollower({
+  // เรียกใช้ฟังก์ชันใหม่ที่เราเพิ่งเขียนใน SheetService
+  saveFollowerData({
     userId: userId,
     displayName: profile.displayName,
     pictureUrl: profile.pictureUrl,
+    language: profile.language || 'th',
     statusMessage: profile.statusMessage || '',
-    firstFollowDate: timestamp,
-    lastFollowDate: timestamp,
-    followCount: 1,
-    status: 'active',
-    sourceChannel: 'LINE'
+    timestamp: timestamp,
+    source: event.source.type || 'user'
   });
-  console.log("👤 New Follower saved: " + profile.displayName);
+  console.log("👤 New Follower saved/updated: " + profile.displayName);
 }
 
 /**
@@ -139,5 +138,7 @@ function handleFollowEvent(event) {
  */
 function handleUnfollowEvent(event) {
   const userId = event.source.userId;
+  // เรียกฟังก์ชันเปลี่ยนสถานะเป็น blocked
   updateFollowerStatus(userId, "blocked");
+  console.log("🚫 User blocked: " + userId);
 }

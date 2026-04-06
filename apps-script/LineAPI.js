@@ -1,22 +1,17 @@
 /**
  * 📡 LineAPI.js - จัดการการเชื่อมต่อกับ LINE Messaging API
- * จัดการการส่งข้อความ, การแสดง Loading Animation, และการจัดการ Webhook
  */
 
 /**
- * 📨 ส่งข้อความไปยังผู้ใช้ LINE
- * @param {string} userId - รหัสผู้ใช้ LINE
- * @param {string|object} message - ข้อความหรือออบเจ็กต์ข้อความ
- * @returns {boolean} ผลลัพธ์การส่ง
+ * 📨 ส่งข้อความไปยังผู้ใช้ LINE (Push Message)
  */
 function sendMessage(userId, message) {
   if (!userId) return false;
-
   try {
     const url = "https://api.line.me/v2/bot/message/push";
     const payload = {
       "to": userId,
-      "messages": Array.isArray(message) ? message : [message]
+      "messages": Array.isArray(message) ? message : [{ "type": "text", "text": message }]
     };
     callLineApi(url, "post", payload);
     return true;
@@ -27,139 +22,73 @@ function sendMessage(userId, message) {
 }
 
 /**
- * ⏳ แสดง Loading Animation
- * @param {string} userId - รหัสผู้ใช้ LINE
+ * 👤 ดึงข้อมูลโปรไฟล์ผู้ใช้จาก LINE (จำเป็นสำหรับ 13 คอลัมน์)
+ */
+function getUserProfile(userId) {
+  if (!userId) return null;
+  const url = `https://api.line.me/v2/bot/profile/${userId}`;
+  try {
+    const options = {
+      "method": "get",
+      "headers": { "Authorization": "Bearer " + CONFIG.LINE_ACCESS_TOKEN }
+    };
+    const response = UrlFetchApp.fetch(url, options);
+    return JSON.parse(response.getContentText());
+  } catch (e) {
+    console.error("❌ Get Profile Error: " + e.message);
+    return { displayName: "ลูกค้า LINE", pictureUrl: "", statusMessage: "" };
+  }
+}
+
+/**
+ * ⏳ แสดง/หยุด Loading Animation
  */
 function showLoading(userId) {
   if (!userId) return;
   try {
-    const url = "https://api.line.me/v2/bot/chat/loading/start";
-    // ปรับเวลาเป็น 10 วินาที เพื่อความเสถียรในการแสดงผล
-    const payload = { "chatId": userId, "loadingSeconds": 10 }; 
-    callLineApi(url, "post", payload);
-  } catch (e) {
-    console.error("❌ Loading Animation Error: " + e.message);
-  }
+    callLineApi("https://api.line.me/v2/bot/chat/loading/start", "post", { "chatId": userId, "loadingSeconds": 10 });
+  } catch (e) { console.error("❌ Loading Error: " + e.message); }
 }
 
-/**
- * 🛑 หยุด Loading Animation
- * @param {string} userId - รหัสผู้ใช้ LINE
- */
 function hideLoading(userId) {
   if (!userId) return;
   try {
-    const url = "https://api.line.me/v2/bot/chat/loading/stop";
-    const payload = { "chatId": userId };
-    callLineApi(url, "post", payload);
+    callLineApi("https://api.line.me/v2/bot/chat/loading/stop", "post", { "chatId": userId });
+  } catch (e) { console.error("❌ Hide Loading Error: " + e.message); }
+}
+
+/**
+ * ✅ ตอบรับข้อความ (Mark as Read)
+ */
+function markAsRead(userId) {
+  if (!userId) return false;
+  try {
+    const url = "https://api.line.me/v2/bot/message/markAsRead";
+    callLineApi(url, "post", { "chatId": userId });
+    return true;
   } catch (e) {
-    console.error("❌ Hide Loading Error: " + e.message);
+    console.error(`❌ markAsRead Error: ${e.message}`);
+    return false;
   }
 }
 
 /**
- * 📞 เรียก LINE API หลัก
- * แก้ไข: ปรับชื่อตัวแปร CONFIG ให้ตรงตาม Config.js
+ * 📞 เรียก LINE API หลัก (ใช้ CONFIG จาก Config.js)
  */
 function callLineApi(url, method, payload) {
   const options = {
     "method": method,
     "headers": {
       "Content-Type": "application/json",
-      "Authorization": "Bearer " + CONFIG.LINE_ACCESS_TOKEN // ✅ แก้ไขจากเดิมที่เป็นชื่อยาวๆ
+      "Authorization": "Bearer " + CONFIG.LINE_ACCESS_TOKEN 
     },
-    "payload": JSON.stringify(payload)
+    "payload": JSON.stringify(payload),
+    "muteHttpExceptions": true
   };
 
   const response = UrlFetchApp.fetch(url, options);
-  const responseCode = response.getResponseCode();
-
-  if (responseCode !== 200) {
-    throw new Error(`LINE API Error: ${responseCode} - ${response.getContentText()}`);
+  if (response.getResponseCode() !== 200) {
+    console.error(`LINE API Error: ${response.getContentText()}`);
   }
-}
-
-/**
- * 📱 จัดการ Webhook จาก LINE
- * @param {object} e - ข้อมูลจาก Webhook
- */
-function doPost(e) {
-  try {
-    const data = JSON.parse(e.postData.contents);
-    const events = data.events;
-
-    for (let event of events) {
-      if (event.type === "message" && event.message.type === "text") {
-        handleMessage(event);
-      } else if (event.type === "follow") {
-        handleFollow(event);
-      } else if (event.type === "unfollow") {
-        handleUnfollow(event);
-      }
-    }
-
-    return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
-  } catch (error) {
-    console.error("❌ Webhook Error: " + error.message);
-    return ContentService.createTextOutput("Error").setMimeType(ContentService.MimeType.TEXT);
-  }
-}
-
-/**
- * 💬 จัดการข้อความที่ได้รับ
- * @param {object} event - ข้อมูล Event จาก LINE
- */
-function handleMessage(event) {
-  const userId = event.source.userId;
-  const messageText = event.message.text;
-
-  // ตัวอย่างการตอบกลับอัตโนมัติ
-  if (messageText.includes("แต้ม")) {
-    const profile = getCustomerProfile(userId);
-    if (profile) {
-      sendMessage(userId, `แต้มปัจจุบันของคุณ: ${profile.points} แต้ม`);
-    } else {
-      sendMessage(userId, "กรุณาสมัครสมาชิกก่อนค่ะ");
-    }
-  } else {
-    sendMessage(userId, "สวัสดีค่ะ! พิมพ์ 'แต้ม' เพื่อดูแต้มสะสม");
-  }
-}
-
-/**
- * ➕ จัดการการ Follow
- * @param {object} event - ข้อมูล Event จาก LINE
- */
-function handleFollow(event) {
-  const userId = event.source.userId;
-  // อาจเพิ่ม Logic สำหรับการ Follow ใหม่
-  console.log(`User ${userId} followed`);
-}
-
-/**
- * ➖ จัดการการ Unfollow
- * @param {object} event - ข้อมูล Event จาก LINE
- */
-function handleUnfollow(event) {
-  const userId = event.source.userId;
-  // อาจเพิ่ม Logic สำหรับการ Unfollow
-  console.log(`User ${userId} unfollowed`);
-}
-
-/**
- * ✅ ตอบรับข้อความ (Mark as Read)
- * @param {string} userId - รหัสผู้ใช้ LINE
- * @returns {boolean} ผลลัพธ์การ mark
- */
-function markAsRead(userId) {
-  if (!userId) return false;
-  try {
-    const url = "https://api.line.me/v2/bot/message/markAsRead";
-    const payload = { "chatId": userId };
-    callLineApi(url, "post", payload);
-    return true;
-  } catch (error) {
-    console.error(`❌ markAsRead Error: ${error.message}`);
-    return false;
-  }
+  return response;
 }
