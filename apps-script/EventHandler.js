@@ -28,9 +28,6 @@ function handleEvent(event) {
 }
 
 /**
- * 💬 ฟังก์ชันจัดการข้อความ
- */
-/**
  * 🧠 EVENTHANDLER.gs
  */
 function handleMessageEvent(event) {
@@ -41,7 +38,7 @@ function handleMessageEvent(event) {
   const replyToken = event.replyToken;
 
   try {
-    // แก้ไขจุดที่ 2: เรียกใช้ markAsRead โดยส่ง userId (หรือ Token ที่เกี่ยวข้อง)
+    // ✅ แก้ไข: เรียก markAsRead โดยใช้ userId เพื่อให้ขึ้นสถานะ "อ่านแล้ว" ใน LINE
     markAsRead(userId); 
     showLoading(userId);
 
@@ -53,27 +50,36 @@ function handleMessageEvent(event) {
     const fulfillmentText = queryResult.fulfillmentText;
     const hasPayload = queryResult.fulfillmentMessages && queryResult.fulfillmentMessages.some(m => m.payload);
 
+    // อัปเดตสถิติการใช้งานในชีท Followers
     updateFollowerInteraction(userId);
 
-    if (intentName === 'Default Fallback Intent' && !fulfillmentText && !hasPayload) return;
+    let botReplyText = "";
 
-    Utilities.sleep(1000);
-
-    // ส่วน Logic การตอบกลับคงเดิมเพื่อรักษา Behavior
-    if (intentName === 'Check_Points') {
-      const memberData = getCustomerProfile(userId);
-      const pointMsg = memberData ? `คุณ ${profile.displayName} มีคะแนนสะสม ${memberData.points.toLocaleString()} แต้มค่ะ 🐾` : "ไม่พบข้อมูลสมาชิกค่ะ";
-      sendMessage(userId, pointMsg);
-      return;
-    }
-
+    // จัดการคำตอบแบบ Payload (Flex Message)
     if (hasPayload) {
-      const lineMessages = queryResult.fulfillmentMessages.filter(m => m.payload && m.payload.line).map(m => m.payload.line);
-      if (lineMessages.length > 0) sendMessage(userId, lineMessages);
-      return;
+      const lineMessages = queryResult.fulfillmentMessages
+        .filter(m => m.payload && m.payload.line)
+        .map(m => m.payload.line);
+      
+      if (lineMessages.length > 0) {
+        sendMessage(userId, lineMessages);
+        botReplyText = "(Flex Message)";
+      }
+    } 
+    // จัดการคำตอบแบบข้อความปกติ
+    else if (fulfillmentText) {
+      sendMessage(userId, fulfillmentText);
+      botReplyText = fulfillmentText;
     }
 
-    if (fulfillmentText) sendMessage(userId, fulfillmentText);
+    // ✅ แก้ไข: บันทึกประวัติการสนทนาลงในชีท Conversations
+    saveLog({
+      userId: userId,
+      displayName: profile.displayName,
+      userMessage: userMessage,
+      intent: intentName,
+      botReply: botReplyText
+    });
 
   } catch (error) {
     console.error("❌ Error in handleMessageEvent:", error);

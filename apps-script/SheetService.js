@@ -82,15 +82,30 @@ function getSheet(sheetName) {
 }
 
 /**
- * 🏗️ ตั้งค่า Database เริ่มต้น
+ * 📝 บันทึกประวัติการสนทนาลงชีท Conversations
+ */
+function saveLog(logData) {
+  const sheet = getSheet(CONFIG.SHEET_NAME.CONVERSATIONS);
+  sheet.appendRow([
+    new Date(),           // A: Timestamp
+    logData.userId,      // B: User ID
+    logData.displayName, // C: Display Name
+    logData.userMessage, // D: User Message
+    logData.intent,      // E: Intent
+    logData.botReply     // F: Bot Reply
+  ]);
+}
+
+/**
+ * 🏗️ ปรับปรุงการตั้งค่า Database และรูปแบบตาราง
  */
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   
   const sheetsToCreate = [
     { name: CONFIG.SHEET_NAME.FOLLOWERS, headers: ['User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 'First Follow', 'Last Follow', 'Follow Count', 'Status', 'Source', 'Tags', 'Last Interaction', 'Total Messages'] },
-    { name: CONFIG.SHEET_NAME.MEMBERS, headers: ['Customer ID', 'Remark', 'Available Coupon', 'Current Points', 'Expiring Points', 'Member Since', 'Member Until', 'Added From', 'Last Access', 'Total Visits', 'Lifetime Points', 'Total Spending', 'Avg Spending', 'Balance', 'Full Name', 'LINE Name', 'Username', 'Gender', 'Email', 'Tel', 'Birthday', 'Address', 'Level', 'Plastic Card', 'Referrer'] },
-    { name: CONFIG.SHEET_NAME.CONVERSATIONS, headers: ['Timestamp', 'User ID', 'Display Name', 'User Message', 'Intent', 'Bot Reply'] } // แก้ไขจุดที่ 1: เพิ่ม Conversations
+    { name: CONFIG.SHEET_NAME.MEMBERS, headers: ['User ID', 'Name', 'Current Points', 'Lifetime Points', 'Total Spending', 'Level', 'Last Access', 'Total Visits'] },
+    { name: CONFIG.SHEET_NAME.CONVERSATIONS, headers: ['Timestamp', 'User ID', 'Display Name', 'User Message', 'Intent', 'Bot Reply'] }
   ];
 
   sheetsToCreate.forEach(s => {
@@ -100,7 +115,7 @@ function setupDatabase() {
       sheet.appendRow(s.headers);
     }
     
-    // แก้ไขจุดที่ 3: ปรับแต่งรูปแบบ Header (#c54327, ฟ้อนต์ขาว, ตัวหนา, Freeze Row 1)
+    // ✅ แก้ไข: จัดรูปแบบหัวข้อคอลัมน์ (พื้นหลังสี #c54327, ตัวอักษรขาว, ตัวหนา, Freeze แถว 1)
     const headerRange = sheet.getRange(1, 1, 1, s.headers.length);
     headerRange.setBackground('#c54327')
                .setFontColor('#ffffff')
