@@ -1,36 +1,9 @@
 /**
  * 📊 SheetService.js - จัดการการทำงานกับ Google Sheets
- * จัดการการอ่าน/เขียนข้อมูลสมาชิก และการตั้งค่า Database เริ่มต้น
  */
 
 /**
- * 🔍 ค้นหาข้อมูลสมาชิกจาก UserId
- * @param {string} userId - รหัสผู้ใช้ LINE
- * @returns {object|null} ข้อมูลสมาชิก หรือ null ถ้าไม่พบ
- */
-function findMemberById(userId) {
-  const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
-  const values = sheet.getDataRange().getValues();
-  const rowIndex = values.findIndex(row => row[0] && row[0].toString() === userId.toString());
-
-  if (rowIndex === -1) return null;
-
-  const data = values[rowIndex];
-  return {
-    userId: data[0],
-    name: data[1] || '',
-    points: Number(data[2]) || 0,
-    totalSpending: Number(data[3]) || 0,
-    level: data[4] || 'Bronze',
-    memberSince: data[5] ? new Date(data[5]).toLocaleDateString('th-TH') : '',
-    lastAccess: data[6] ? new Date(data[6]).toLocaleDateString('th-TH') : '',
-    totalVisits: Number(data[7]) || 0,
-    lifetimePoints: Number(data[8]) || 0
-  };
-}
-
-/**
- * 💾 บันทึกหรืออัปเดตข้อมูล Follower (รองรับ 13 คอลัมน์ตามหัวข้อที่กำหนด)
+ * 💾 บันทึกหรืออัปเดตข้อมูล Follower (13 คอลัมน์)
  */
 function saveFollowerData(data) {
   const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
@@ -39,36 +12,35 @@ function saveFollowerData(data) {
   const now = new Date();
 
   if (rowIndex === -1) {
-    // กรณีเพื่อนใหม่: เพิ่มแถวใหม่ 13 คอลัมน์
+    // เพิ่มแถวใหม่ 13 คอลัมน์
     sheet.appendRow([
       data.userId,          // 1. User ID
       data.displayName,     // 2. Display Name
       data.pictureUrl,      // 3. Picture URL
-      data.language || 'th',// 4. Language
+      data.language,        // 4. Language
       data.statusMessage,   // 5. Status Message
       now,                  // 6. First Follow
       now,                  // 7. Last Follow
       1,                    // 8. Follow Count
       'active',             // 9. Status
-      data.source || 'user',// 10. Source
+      data.source,          // 10. Source
       '',                   // 11. Tags
       now,                  // 12. Last Interaction
       1                     // 13. Total Messages
     ]);
   } else {
-    // กรณีเคยเป็นเพื่อนแล้ว: อัปเดตข้อมูลบางส่วน (Minimal Impact)
+    // อัปเดตเมื่อกลับมาติดตามใหม่
     const row = rowIndex + 1;
     const currentFollowCount = Number(values[rowIndex][7]) || 0;
-    sheet.getRange(row, 2).setValue(data.displayName);   // Update Name
+    sheet.getRange(row, 2).setValue(data.displayName);   // Display Name
     sheet.getRange(row, 7).setValue(now);                // Last Follow
-    sheet.getRange(row, 8).setValue(currentFollowCount + 1); // Follow Count +1
-    sheet.getRange(row, 9).setValue('active');           // กลับมา active
-    sheet.getRange(row, 12).setValue(now);               // Last Interaction
+    sheet.getRange(row, 8).setValue(currentFollowCount + 1); 
+    sheet.getRange(row, 9).setValue('active');           // สถานะเป็น active
   }
 }
 
 /**
- * 🚫 อัปเดตสถานะเป็น blocked เมื่อผู้ใช้บล็อกบอท
+ * 🚫 อัปเดตสถานะเป็น blocked
  */
 function updateFollowerStatus(userId, status) {
   const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
@@ -76,27 +48,28 @@ function updateFollowerStatus(userId, status) {
   const rowIndex = values.findIndex(row => row[0] === userId);
   
   if (rowIndex !== -1) {
-    // คอลัมน์ที่ 9 คือ Status
-    sheet.getRange(rowIndex + 1, 9).setValue(status);
+    sheet.getRange(rowIndex + 1, 9).setValue(status); // คอลัมน์ที่ 9 (Status)
   }
 }
 
 /**
- * 🔄 อัปเดตข้อมูล Last Access (Behavior เดิม)
+ * 🔄 อัปเดตการปฏิสัมพันธ์ (Last Interaction และ Message Count)
  */
-function updateLastAccess(userId) {
-  updateFollowerStatus(userId, 'active'); // ทุกครั้งที่เข้าถึง ให้มั่นใจว่าเป็น active
+function updateFollowerInteraction(userId) {
   const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
   const values = sheet.getDataRange().getValues();
   const rowIndex = values.findIndex(row => row[0] === userId);
   
   if (rowIndex !== -1) {
-    sheet.getRange(rowIndex + 1, 7).setValue(new Date()); // Column G
+    const row = rowIndex + 1;
+    const currentMessages = Number(values[rowIndex][12]) || 0;
+    sheet.getRange(row, 12).setValue(new Date());        // 12. Last Interaction
+    sheet.getRange(row, 13).setValue(currentMessages + 1); // 13. Total Messages
   }
 }
 
 /**
- * 🛠 Helper: ดึง Sheet object และจัดการกรณีไม่มี Sheet (DRY Principle)
+ * 🛠 Helper: ดึง Sheet object
  */
 function getSheet(sheetName) {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
@@ -109,19 +82,11 @@ function getSheet(sheetName) {
 }
 
 /**
- * 🏗️ ตั้งค่า Database เริ่มต้น (Minimal Impact - รักษาโครงสร้างเดิม)
+ * 🏗️ ตั้งค่า Database เริ่มต้น
  */
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
 
-  // Sheet สมาชิก
-  if (!ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS)) {
-    ss.insertSheet(CONFIG.SHEET_NAME.MEMBERS).appendRow([
-      'User ID', 'Name', 'Current Points', 'Lifetime Points', 'Total Spending', 'Level', 'Last Access', 'Total Visits'
-    ]);
-  }
-
-  // Sheet Followers (จัดหัวข้อตามที่คุณระบุ 13 หัวข้อ)
   if (!ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS)) {
     ss.insertSheet(CONFIG.SHEET_NAME.FOLLOWERS).appendRow([
       'User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 
@@ -129,11 +94,23 @@ function setupDatabase() {
       'Tags', 'Last Interaction', 'Total Messages'
     ]);
   }
+  
+  if (!ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS)) {
+    ss.insertSheet(CONFIG.SHEET_NAME.MEMBERS).appendRow([
+      'Customer ID', 'Remark', 'Available Coupon', 'Current Points', 'Expiring Points', 
+      'Member Since', 'Member Until', 'Added From', 'Last Access', 'Total Visits', 
+      'Lifetime Points', 'Total Spending', 'Avg Spending', 'Balance', 'Full Name', 
+      'LINE Name', 'Username', 'Gender', 'Email', 'Tel', 
+      'Birthday', 'Address', 'Level', 'Plastic Card', 'Referrer'
+    ]);
+  }
 }
 
-/**
- * 📝 ฟังก์ชันเดิมที่ใช้ในระบบ (รักษาไว้เพื่อไม่ให้กระทบจุดอื่น)
- */
-function addNewMember(memberData) {
-  saveFollowerData(memberData);
+// รักษา Behavior เดิมเพื่อไม่ให้กระทบฟังก์ชันอื่น
+function findMemberById(userId) {
+  const sheet = getSheet(CONFIG.SHEET_NAME.FOLLOWERS);
+  const values = sheet.getDataRange().getValues();
+  const rowIndex = values.findIndex(row => row[0] === userId);
+  if (rowIndex === -1) return null;
+  return { userId: values[rowIndex][0], name: values[rowIndex][1] };
 }

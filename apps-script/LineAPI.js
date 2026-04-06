@@ -22,7 +22,7 @@ function sendMessage(userId, message) {
 }
 
 /**
- * 👤 ดึงข้อมูลโปรไฟล์ผู้ใช้จาก LINE (จำเป็นสำหรับ 13 คอลัมน์)
+ * 👤 ดึงข้อมูลโปรไฟล์ผู้ใช้จาก LINE (จำเป็นสำหรับข้อมูล 13 คอลัมน์)
  */
 function getUserProfile(userId) {
   if (!userId) return null;
@@ -36,25 +36,19 @@ function getUserProfile(userId) {
     return JSON.parse(response.getContentText());
   } catch (e) {
     console.error("❌ Get Profile Error: " + e.message);
-    return { displayName: "ลูกค้า LINE", pictureUrl: "", statusMessage: "" };
+    return { displayName: "ลูกค้า LINE", pictureUrl: "", statusMessage: "", language: "th" };
   }
 }
 
 /**
- * ⏳ แสดง/หยุด Loading Animation
+ * ⏳ แสดง Loading Animation
  */
 function showLoading(userId) {
   if (!userId) return;
   try {
-    callLineApi("https://api.line.me/v2/bot/chat/loading/start", "post", { "chatId": userId, "loadingSeconds": 10 });
+    const url = "https://api.line.me/v2/bot/chat/loading/start";
+    callLineApi(url, "post", { "chatId": userId, "loadingSeconds": 10 });
   } catch (e) { console.error("❌ Loading Error: " + e.message); }
-}
-
-function hideLoading(userId) {
-  if (!userId) return;
-  try {
-    callLineApi("https://api.line.me/v2/bot/chat/loading/stop", "post", { "chatId": userId });
-  } catch (e) { console.error("❌ Hide Loading Error: " + e.message); }
 }
 
 /**
@@ -73,7 +67,7 @@ function markAsRead(userId) {
 }
 
 /**
- * 📞 เรียก LINE API หลัก (ใช้ CONFIG จาก Config.js)
+ * 📞 เรียก LINE API หลัก
  */
 function callLineApi(url, method, payload) {
   const options = {
@@ -85,10 +79,5 @@ function callLineApi(url, method, payload) {
     "payload": JSON.stringify(payload),
     "muteHttpExceptions": true
   };
-
-  const response = UrlFetchApp.fetch(url, options);
-  if (response.getResponseCode() !== 200) {
-    console.error(`LINE API Error: ${response.getContentText()}`);
-  }
-  return response;
+  return UrlFetchApp.fetch(url, options);
 }

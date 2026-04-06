@@ -28,7 +28,7 @@ function handleEvent(event) {
 }
 
 /**
- * 💬 ฟังก์ชันจัดการข้อความ (ฉบับแก้ไขตำแหน่ง markAsReadToken)
+ * 💬 ฟังก์ชันจัดการข้อความ
  */
 function handleMessageEvent(event) {
   if (event.message.type !== 'text') return;
@@ -36,18 +36,14 @@ function handleMessageEvent(event) {
   const userId = event.source.userId;
   const userMessage = event.message.text;
   const replyToken = event.replyToken;
-  
-  // ✅ แก้ไข: ดึง markAsReadToken จากภายในอ็อบเจกต์ message
   const markAsReadToken = event.message.markAsReadToken; 
 
   try {
-    // 🌟 1. ขึ้นสถานะ "อ่านแล้ว" และ "Loading" พร้อมกันทันที
     if (markAsReadToken) {
       markAsRead(markAsReadToken);
     }
-    sendLoadingAnimation(userId);
+    showLoading(userId);
 
-    // 🌟 2. ส่งไป Dialogflow เพื่อวิเคราะห์ Intent
     const dfResponse = detectIntent(userId, userMessage);
     const profile = getUserProfile(userId) || { displayName: 'ลูกค้า' };
     
@@ -55,56 +51,42 @@ function handleMessageEvent(event) {
     const intentName = queryResult.intent ? queryResult.intent.displayName : 'Default Fallback Intent';
     const fulfillmentText = queryResult.fulfillmentText;
 
-    // ตรวจสอบว่ามี Custom Payload (เช่น Flex Message) หรือไม่
     const hasPayload = queryResult.fulfillmentMessages && 
                        queryResult.fulfillmentMessages.some(m => m.payload);
 
-    // บันทึกการปฏิสัมพันธ์เบื้องหลัง
-    updateFollowerInteraction(userId, profile);
+    // อัปเดตการปฏิสัมพันธ์ (Last Interaction / Message Count)
+    updateFollowerInteraction(userId);
 
-    // 🌟 3. เงียบเมื่อไม่รู้คำตอบ (Silence on Fallback)
-    // ปรับเงื่อนไข: จะเงียบก็ต่อเมื่อ (เป็น Fallback) และ (ไม่มีทั้งข้อความและไม่มี Payload)
     if (intentName === 'Default Fallback Intent' && !fulfillmentText && !hasPayload) {
-      console.log(`ℹ️ Bot stayed silent for message: "${userMessage}"`);
       return; 
     }
 
-    // 🌟 4. ลดเวลาหน่วงให้สั้นลง (เหลือ 1 วินาที)
     Utilities.sleep(1000);
 
-    // 🌟 5. ส่งคำตอบกลับ
-    // กรณีที่ 1: ตรวจสอบแต้มสมาชิก (Logic ภายใน Apps Script)
     if (intentName === 'Check_Points') {
       const memberData = getCustomerProfile(userId);
       if (memberData && memberData.points !== undefined) {
         const pointMsg = `คุณ ${profile.displayName} มีคะแนนสะสม ${memberData.points.toLocaleString()} แต้มค่ะ 🐾`;
-        replyMessage(replyToken, pointMsg);
-        saveLog({ userId, displayName: profile.displayName, userMessage, botReply: pointMsg, intent: intentName });
+        sendMessage(userId, pointMsg);
       } else {
-        const noMemberMsg = "ไม่พบข้อมูลสมาชิกของคุณค่ะ สนใจสมัครสมาชิกไหมคะ?";
-        replyMessage(replyToken, noMemberMsg);
-        saveLog({ userId, displayName: profile.displayName, userMessage, botReply: noMemberMsg, intent: intentName });
+        sendMessage(userId, "ไม่พบข้อมูลสมาชิกของคุณค่ะ สนใจสมัครสมาชิกไหมคะ?");
       }
       return;
     }
 
-    // กรณีที่ 2: มี Custom Payload จาก Dialogflow (เช่น Flex Message สมัครสมาชิก)
     if (hasPayload) {
       const lineMessages = queryResult.fulfillmentMessages
         .filter(m => m.payload && m.payload.line)
         .map(m => m.payload.line);
       
       if (lineMessages.length > 0) {
-        replyMessage(replyToken, lineMessages);
-        saveLog({ userId, displayName: profile.displayName, userMessage, botReply: "Flex Message Sent", intent: intentName });
+        sendMessage(userId, lineMessages);
         return;
       }
     }
 
-    // กรณีที่ 3: ส่งข้อความ Text ธรรมดาจาก Dialogflow
     if (fulfillmentText) {
-      replyMessage(replyToken, fulfillmentText);
-      saveLog({ userId, displayName: profile.displayName, userMessage, botReply: fulfillmentText, intent: intentName });
+      sendMessage(userId, fulfillmentText);
     }
 
   } catch (error) {
@@ -117,10 +99,9 @@ function handleMessageEvent(event) {
  */
 function handleFollowEvent(event) {
   const userId = event.source.userId;
-  const profile = getUserProfile(userId); // ฟังก์ชันเดิมที่มีอยู่เพื่อดึงชื่อ/รูปจาก LINE
+  const profile = getUserProfile(userId); 
   const timestamp = new Date(event.timestamp);
 
-  // เรียกใช้ฟังก์ชันใหม่ที่เราเพิ่งเขียนใน SheetService
   saveFollowerData({
     userId: userId,
     displayName: profile.displayName,
@@ -130,7 +111,6 @@ function handleFollowEvent(event) {
     timestamp: timestamp,
     source: event.source.type || 'user'
   });
-  console.log("👤 New Follower saved/updated: " + profile.displayName);
 }
 
 /**
@@ -138,7 +118,5 @@ function handleFollowEvent(event) {
  */
 function handleUnfollowEvent(event) {
   const userId = event.source.userId;
-  // เรียกฟังก์ชันเปลี่ยนสถานะเป็น blocked
   updateFollowerStatus(userId, "blocked");
-  console.log("🚫 User blocked: " + userId);
 }
