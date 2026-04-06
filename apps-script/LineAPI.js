@@ -54,14 +54,15 @@ function showLoading(userId) {
 /**
  * ✅ ตอบรับข้อความ (Mark as Read)
  */
-function markAsRead(userId) {
-  if (!userId) return false;
+function markAsRead(chatId) {
+  if (!chatId) return false;
   try {
     const url = "https://api.line.me/v2/bot/message/markAsRead";
-    callLineApi(url, "post", { "chatId": userId });
+    const payload = { "chatId": chatId };
+    callLineApi(url, "post", payload);
     return true;
-  } catch (e) {
-    console.error(`❌ markAsRead Error: ${e.message}`);
+  } catch (error) {
+    console.error(`❌ markAsRead Error: ${error.message}`);
     return false;
   }
 }

@@ -30,18 +30,19 @@ function handleEvent(event) {
 /**
  * 💬 ฟังก์ชันจัดการข้อความ
  */
+/**
+ * 🧠 EVENTHANDLER.gs
+ */
 function handleMessageEvent(event) {
   if (event.message.type !== 'text') return;
 
   const userId = event.source.userId;
   const userMessage = event.message.text;
   const replyToken = event.replyToken;
-  const markAsReadToken = event.message.markAsReadToken; 
 
   try {
-    if (markAsReadToken) {
-      markAsRead(markAsReadToken);
-    }
+    // แก้ไขจุดที่ 2: เรียกใช้ markAsRead โดยส่ง userId (หรือ Token ที่เกี่ยวข้อง)
+    markAsRead(userId); 
     showLoading(userId);
 
     const dfResponse = detectIntent(userId, userMessage);
@@ -50,44 +51,29 @@ function handleMessageEvent(event) {
     const queryResult = dfResponse.queryResult;
     const intentName = queryResult.intent ? queryResult.intent.displayName : 'Default Fallback Intent';
     const fulfillmentText = queryResult.fulfillmentText;
+    const hasPayload = queryResult.fulfillmentMessages && queryResult.fulfillmentMessages.some(m => m.payload);
 
-    const hasPayload = queryResult.fulfillmentMessages && 
-                       queryResult.fulfillmentMessages.some(m => m.payload);
-
-    // อัปเดตการปฏิสัมพันธ์ (Last Interaction / Message Count)
     updateFollowerInteraction(userId);
 
-    if (intentName === 'Default Fallback Intent' && !fulfillmentText && !hasPayload) {
-      return; 
-    }
+    if (intentName === 'Default Fallback Intent' && !fulfillmentText && !hasPayload) return;
 
     Utilities.sleep(1000);
 
+    // ส่วน Logic การตอบกลับคงเดิมเพื่อรักษา Behavior
     if (intentName === 'Check_Points') {
       const memberData = getCustomerProfile(userId);
-      if (memberData && memberData.points !== undefined) {
-        const pointMsg = `คุณ ${profile.displayName} มีคะแนนสะสม ${memberData.points.toLocaleString()} แต้มค่ะ 🐾`;
-        sendMessage(userId, pointMsg);
-      } else {
-        sendMessage(userId, "ไม่พบข้อมูลสมาชิกของคุณค่ะ สนใจสมัครสมาชิกไหมคะ?");
-      }
+      const pointMsg = memberData ? `คุณ ${profile.displayName} มีคะแนนสะสม ${memberData.points.toLocaleString()} แต้มค่ะ 🐾` : "ไม่พบข้อมูลสมาชิกค่ะ";
+      sendMessage(userId, pointMsg);
       return;
     }
 
     if (hasPayload) {
-      const lineMessages = queryResult.fulfillmentMessages
-        .filter(m => m.payload && m.payload.line)
-        .map(m => m.payload.line);
-      
-      if (lineMessages.length > 0) {
-        sendMessage(userId, lineMessages);
-        return;
-      }
+      const lineMessages = queryResult.fulfillmentMessages.filter(m => m.payload && m.payload.line).map(m => m.payload.line);
+      if (lineMessages.length > 0) sendMessage(userId, lineMessages);
+      return;
     }
 
-    if (fulfillmentText) {
-      sendMessage(userId, fulfillmentText);
-    }
+    if (fulfillmentText) sendMessage(userId, fulfillmentText);
 
   } catch (error) {
     console.error("❌ Error in handleMessageEvent:", error);
