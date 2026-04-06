@@ -43,12 +43,15 @@ function getUserProfile(userId) {
 /**
  * ⏳ แสดง Loading Animation
  */
-function showLoading(userId) {
+function sendLoadingAnimation(userId) {
   if (!userId) return;
   try {
     const url = "https://api.line.me/v2/bot/chat/loading/start";
-    callLineApi(url, "post", { "chatId": userId, "loadingSeconds": 10 });
-  } catch (e) { console.error("❌ Loading Error: " + e.message); }
+    const payload = { "chatId": userId, "loadingSeconds": 5 }; // ปรับเป็น 5 วินาทีตามมาตรฐาน
+    callLineApi(url, "post", payload);
+  } catch (e) {
+    console.error("❌ sendLoadingAnimation Error: " + e.message);
+  }
 }
 
 /**

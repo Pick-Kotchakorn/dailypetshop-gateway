@@ -30,6 +30,9 @@ function handleEvent(event) {
 /**
  * 🧠 EVENTHANDLER.gs
  */
+/**
+ * 💬 ฟังก์ชันจัดการข้อความ
+ */
 function handleMessageEvent(event) {
   if (event.message.type !== 'text') return;
 
@@ -38,10 +41,11 @@ function handleMessageEvent(event) {
   const replyToken = event.replyToken;
 
   try {
-    // ✅ แก้ไข: เรียก markAsRead โดยใช้ userId เพื่อให้ขึ้นสถานะ "อ่านแล้ว" ใน LINE
-    markAsRead(userId); 
-    showLoading(userId);
+    // 🌟 เรียกใช้งานฟังก์ชันใหม่ตามลำดับ UX
+    markAsRead(userId);           // 1. ขึ้นว่า "อ่านแล้ว" ทันที
+    sendLoadingAnimation(userId); // 2. ขึ้น "กำลังพิมพ์..." (Loading)
 
+    // --- ส่วนประมวลผล Dialogflow และ Logic อื่นๆ คงเดิม ---
     const dfResponse = detectIntent(userId, userMessage);
     const profile = getUserProfile(userId) || { displayName: 'ลูกค้า' };
     
@@ -50,35 +54,31 @@ function handleMessageEvent(event) {
     const fulfillmentText = queryResult.fulfillmentText;
     const hasPayload = queryResult.fulfillmentMessages && queryResult.fulfillmentMessages.some(m => m.payload);
 
-    // อัปเดตสถิติการใช้งานในชีท Followers
     updateFollowerInteraction(userId);
 
-    let botReplyText = "";
+    if (intentName === 'Default Fallback Intent' && !fulfillmentText && !hasPayload) return;
 
-    // จัดการคำตอบแบบ Payload (Flex Message)
-    if (hasPayload) {
-      const lineMessages = queryResult.fulfillmentMessages
-        .filter(m => m.payload && m.payload.line)
-        .map(m => m.payload.line);
-      
-      if (lineMessages.length > 0) {
-        sendMessage(userId, lineMessages);
-        botReplyText = "(Flex Message)";
-      }
-    } 
-    // จัดการคำตอบแบบข้อความปกติ
-    else if (fulfillmentText) {
+    Utilities.sleep(1000); // หน่วงเวลาเพื่อให้ดูเป็นธรรมชาติ
+
+    // การตอบกลับ (Response Logic) คงเดิมทุกประการ
+    if (intentName === 'Check_Points') {
+      const memberData = getCustomerProfile(userId);
+      const pointMsg = memberData ? `คุณ ${profile.displayName} มีคะแนนสะสม ${memberData.points.toLocaleString()} แต้มค่ะ 🐾` : "ไม่พบข้อมูลสมาชิกค่ะ";
+      sendMessage(userId, pointMsg);
+    } else if (hasPayload) {
+      const lineMessages = queryResult.fulfillmentMessages.filter(m => m.payload && m.payload.line).map(m => m.payload.line);
+      if (lineMessages.length > 0) sendMessage(userId, lineMessages);
+    } else if (fulfillmentText) {
       sendMessage(userId, fulfillmentText);
-      botReplyText = fulfillmentText;
     }
 
-    // ✅ แก้ไข: บันทึกประวัติการสนทนาลงในชีท Conversations
+    // บันทึกประวัติสนทนา
     saveLog({
       userId: userId,
       displayName: profile.displayName,
       userMessage: userMessage,
       intent: intentName,
-      botReply: botReplyText
+      botReply: fulfillmentText || (hasPayload ? "Flex Message" : "")
     });
 
   } catch (error) {

@@ -99,13 +99,31 @@ function saveLog(logData) {
 /**
  * 🏗️ ปรับปรุงการตั้งค่า Database และรูปแบบตาราง
  */
+/**
+ * 🏗️ ปรับปรุงการจัดเรียงหัวข้อชีท Membership และรูปแบบตาราง
+ */
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   
   const sheetsToCreate = [
-    { name: CONFIG.SHEET_NAME.FOLLOWERS, headers: ['User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 'First Follow', 'Last Follow', 'Follow Count', 'Status', 'Source', 'Tags', 'Last Interaction', 'Total Messages'] },
-    { name: CONFIG.SHEET_NAME.MEMBERS, headers: ['User ID', 'Name', 'Current Points', 'Lifetime Points', 'Total Spending', 'Level', 'Last Access', 'Total Visits'] },
-    { name: CONFIG.SHEET_NAME.CONVERSATIONS, headers: ['Timestamp', 'User ID', 'Display Name', 'User Message', 'Intent', 'Bot Reply'] }
+    { 
+      name: CONFIG.SHEET_NAME.FOLLOWERS, 
+      headers: ['User ID', 'Display Name', 'Picture URL', 'Language', 'Status Message', 'First Follow', 'Last Follow', 'Follow Count', 'Status', 'Source', 'Tags', 'Last Interaction', 'Total Messages'] 
+    },
+    { 
+      name: CONFIG.SHEET_NAME.MEMBERS, 
+      headers: [
+        'Customer ID', 'Remark', 'Available Coupon', 'Current Points', 'Expiring Points', 
+        'Member Since', 'Member Until', 'Added From', 'Last Access', 'Total Visits', 
+        'Lifetime Points', 'Total Spending', 'Avg Spending', 'Balance', 'Full Name', 
+        'LINE Name', 'Username', 'Gender', 'Email', 'Tel', 
+        'Birthday', 'Address', 'Level', 'Plastic Card', 'Referrer'
+      ] 
+    },
+    { 
+      name: CONFIG.SHEET_NAME.CONVERSATIONS, 
+      headers: ['Timestamp', 'User ID', 'Display Name', 'User Message', 'Intent', 'Bot Reply'] 
+    }
   ];
 
   sheetsToCreate.forEach(s => {
@@ -113,10 +131,13 @@ function setupDatabase() {
     if (!sheet) {
       sheet = ss.insertSheet(s.name);
       sheet.appendRow(s.headers);
+    } else {
+      // ตรวจสอบและอัปเดตหัวข้อคอลัมน์ให้ตรงตามที่กำหนดใหม่
+      sheet.getRange(1, 1, 1, s.headers.length).setValues([s.headers]);
     }
     
-    // ✅ แก้ไข: จัดรูปแบบหัวข้อคอลัมน์ (พื้นหลังสี #c54327, ตัวอักษรขาว, ตัวหนา, Freeze แถว 1)
-    const headerRange = sheet.getRange(1, 1, 1, s.headers.length);
+    // จัดรูปแบบหัวข้อ: พื้นหลังสี #c54327, ตัวอักษรขาว, ตัวหนา, Freeze Row 1
+    const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
     headerRange.setBackground('#c54327')
                .setFontColor('#ffffff')
                .setFontWeight('bold');
