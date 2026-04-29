@@ -54,14 +54,24 @@
   }
 
   function loadData() {
-    google.script.run.withSuccessHandler(function(res) {
-      if (res) {
-        userCurrentPoints = res.points || 0;
-        document.getElementById('my-points').innerText = userCurrentPoints.toLocaleString();
-        renderRewards(res.rewards || []);
-      }
-      document.getElementById('loading').style.display = 'none';
-    }).getRewardPageData(userProfile.userId);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res) {
+          userCurrentPoints = res.points || 0;
+          document.getElementById('my-points').innerText = userCurrentPoints.toLocaleString();
+          renderRewards(res.rewards || []);
+        }
+        document.getElementById('loading').style.display = 'none';
+      })
+      .withFailureHandler(function(err) {
+        // ✅ แก้ปัญหาหน้าจอค้างโดยแสดงข้อความ Error แทน
+        document.getElementById('loading').innerHTML = `
+          <div style="color:#c54327; text-align:center; padding:20px;">
+            ❌ เกิดข้อผิดพลาดบนเซิร์ฟเวอร์<br>
+            <small>${err.message}</small>
+          </div>`;
+      })
+      .getRewardPageData(userProfile.userId);
   }
 
   function renderRewards(rewards) {

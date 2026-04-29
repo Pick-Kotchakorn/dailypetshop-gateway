@@ -444,17 +444,28 @@ function addAdminTransaction(userId, amount, note) {
  * รวมข้อมูลสำหรับหน้าแลกรางวัล (คะแนนผู้ใช้ + รายการของรางวัล)
  */
 function getRewardPageData(userId) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-  const data = sheet.getDataRange().getValues();
-  
-  const memberRow = data.find(row => row[COL.USER_ID - 1] === userId);
-  const points = memberRow ? Number(memberRow[COL.CURRENT_POINTS - 1]) : 0;
-  
-  return {
-    points: points,
-    rewards: getRewardsList() // ฟังก์ชันเดิมที่เราสร้างไว้ก่อนหน้านี้
-  };
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
+    if (!sheet) throw new Error("ไม่พบ Sheet ชื่อ " + CONFIG.SHEET_NAME.MEMBERS);
+    
+    const data = sheet.getDataRange().getValues();
+    
+    // ✅ เทียบ ID แบบปลอดภัย (Robust Comparison)
+    const memberRow = data.find(row => 
+      row[COL.USER_ID - 1] && row[COL.USER_ID - 1].toString() === userId.toString()
+    );
+    
+    const points = memberRow ? Number(memberRow[COL.CURRENT_POINTS - 1]) : 0;
+    
+    return {
+      points: points,
+      rewards: getRewardsList()
+    };
+  } catch (e) {
+    console.error("getRewardPageData Error: " + e.message);
+    throw new Error(e.message); // ส่ง Error กลับไปหา Client
+  }
 }
 
 /**
