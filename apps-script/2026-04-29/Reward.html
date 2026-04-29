@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Rewards - Daily Pet Shop</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --primary: #c54327; --gold: #faaf73; --bg: #fdf6f5; --text: #4A3F35; }
+    body { font-family: 'Kanit', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
+    .header { background: var(--primary); color: white; padding: 30px 20px; text-align: center; border-radius: 0 0 30px 30px; }
+    .header h1 { margin: 0; font-size: 1.5rem; }
+    .user-points { background: rgba(255,255,255,0.2); display: inline-block; padding: 5px 20px; border-radius: 20px; margin-top: 10px; font-weight: 500; }
+    .reward-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 20px; }
+    .reward-card { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+    .reward-img { width: 100%; aspect-ratio: 1/1; object-fit: cover; background: #eee; }
+    .reward-info { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; }
+    .reward-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 5px; height: 2.4em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .reward-pts { color: var(--primary); font-weight: 600; font-size: 1rem; margin-bottom: 10px; }
+    .reward-stock { font-size: 0.75rem; color: #888; margin-bottom: 10px; }
+    .btn-redeem { background: var(--primary); color: white; border: none; padding: 8px; border-radius: 10px; font-weight: 500; cursor: pointer; width: 100%; transition: 0.3s; }
+    .btn-redeem:disabled { background: #ccc; cursor: not-allowed; }
+    #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: flex; justify-content: center; align-items: center; z-index: 100; }
+  </style>
+</head>
+<body>
+<div id="loading">กำลังโหลดของรางวัล...</div>
+<div class="header">
+  <h1>แลกของรางวัล 🎁</h1>
+  <div class="user-points">คะแนนของคุณ: <span id="my-points">0</span> แต้ม</div>
+</div>
+<div class="reward-grid" id="reward-list"></div>
+
+<script>
+  let userProfile = null;
+  let userCurrentPoints = 0;
+
+  async function main() {
+    try {
+      await liff.init({ liffId: "2009630242-iPO8WjV7" });
+      if (!liff.isLoggedIn()) {
+        // 🚩 แก้ไข: บังคับให้ Redirect กลับมาหน้าเดิม (Reward) หลังล็อกอิน
+        liff.login({ redirectUri: window.location.href }); 
+      } else {
+        userProfile = await liff.getProfile();
+        loadData();
+      }
+    } catch (err) {
+      console.error(err);
+      document.getElementById('loading').innerText = "❌ การเชื่อมต่อ LINE ขัดข้อง";
+    }
+  }
+
+  function loadData() {
+    google.script.run.withSuccessHandler(function(res) {
+      if (res) {
+        userCurrentPoints = res.points || 0;
+        document.getElementById('my-points').innerText = userCurrentPoints.toLocaleString();
+        renderRewards(res.rewards || []);
+      }
+      document.getElementById('loading').style.display = 'none';
+    }).getRewardPageData(userProfile.userId);
+  }
+
+  function renderRewards(rewards) {
+    const list = document.getElementById('reward-list');
+    list.innerHTML = '';
+    if (rewards.length === 0) {
+      list.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">ขณะนี้ยังไม่มีของรางวัลค่ะ</p>';
+      return;
+    }
+    rewards.forEach(item => {
+      const isAffordable = userCurrentPoints >= item.points;
+      const hasStock = item.stock > 0;
+      list.innerHTML += `
+        <div class="reward-card">
+          <img src="${item.image || 'https://via.placeholder.com/300'}" class="reward-img">
+          <div class="reward-info">
+            <div class="reward-title">${item.title}</div>
+            <div class="reward-pts">${Number(item.points).toLocaleString()} แต้ม</div>
+            <div class="reward-stock">เหลือ ${item.stock} ชิ้น</div>
+            <button class="btn-redeem" ${(!isAffordable || !hasStock) ? 'disabled' : ''} 
+              onclick="handleRedeem('${item.id}', '${item.title}', ${item.points})">
+              ${!hasStock ? 'หมดแล้ว' : !isAffordable ? 'แต้มไม่พอ' : 'แลกรางวัล'}
+            </button>
+          </div>
+        </div>`;
+    });
+  }
+
+  function handleRedeem(id, title, pts) {
+    if (confirm(`ยืนยันการแลก "${title}" ใช้ ${pts} แต้ม?`)) {
+      document.getElementById('loading').style.display = 'flex';
+      document.getElementById('loading').innerText = 'กำลังดำเนินการ...';
+      google.script.run.withSuccessHandler(function(res) {
+        alert(res.message);
+        location.reload();
+      }).redeemReward(userProfile.userId, id);
+    }
+  }
+  main();
+</script>
+</body>
+</html>
