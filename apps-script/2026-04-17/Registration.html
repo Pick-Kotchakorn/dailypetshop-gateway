@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>สมัครสมาชิก - Daily Pet Shop</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #c54327;
+            --primary-light: #fdf6f5;
+            --bg: #f8f9fa;
+            --text: #4A3F35;
+            --gray: #8c8c8c;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .registration-card {
+            background: var(--white);
+            width: 100%;
+            max-width: 450px;
+            margin: 20px;
+            padding: 2.5rem 1.5rem;
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(197, 67, 39, 0.08);
+            text-align: center;
+            height: fit-content;
+        }
+
+        .logo { width: 90px; margin-bottom: 1rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
+        
+        h2 { margin: 0; color: var(--primary); font-weight: 600; font-size: 1.8rem; }
+        .subtitle { font-size: 0.95rem; color: var(--gray); margin-bottom: 2rem; }
+        .subtitle b { color: var(--primary); }
+
+        .section-title {
+            text-align: left;
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.5rem 0 1rem 0;
+            padding-left: 10px;
+            border-left: 4px solid var(--primary);
+            color: var(--primary);
+        }
+
+        .form-group { text-align: left; margin-bottom: 1.2rem; }
+        label { display: block; font-size: 0.85rem; margin-bottom: 0.4rem; font-weight: 500; color: var(--text); }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1.5px solid #eee;
+            border-radius: 14px;
+            font-size: 1rem;
+            font-family: 'Kanit', sans-serif;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            background-color: #fcfcfc;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--white);
+            box-shadow: 0 0 0 4px rgba(197, 67, 39, 0.1);
+        }
+
+        input[readonly] { background: #f1f1f1; color: var(--gray); border-color: #eee; }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        textarea { height: 100px; resize: none; }
+
+        .btn-submit {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 2rem;
+            box-shadow: 0 10px 20px rgba(197, 67, 39, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .btn-submit:active { transform: scale(0.98); box-shadow: 0 5px 10px rgba(197, 67, 39, 0.2); }
+        .btn-submit:disabled { background: #ccc; box-shadow: none; }
+
+        /* Loading Spinner */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.95);
+            justify-content: center; align-items: center;
+            z-index: 1000; flex-direction: column;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 45px; height: 45px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        hr { border: 0; border-top: 1px solid #eee; margin: 2rem 0; }
+    </style>
+</head>
+<body>
+
+    <div id="loading" class="loading-overlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; font-weight: 500;">กำลังบันทึกข้อมูลสมาชิก... 🐾</p>
+    </div>
+
+    <div class="registration-card">
+        <img src="https://i.postimg.cc/DmkgH66r/DPS-Brand-Logo-05.png" alt="Logo" class="logo">
+        <h2>ยินดีต้อนรับสมาชิก</h2>
+        <p class="subtitle">รับฟรี <b>50 แต้ม</b> แรกเข้าทันที! 🐾</p>
+
+        <form id="regForm">
+            <input type="hidden" id="userId">
+            
+            <div class="section-title">ข้อมูลส่วนตัว</div>
+            
+            <div class="form-group">
+                <label>ชื่อใน LINE</label>
+                <input type="text" id="displayName" readonly>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>ชื่อจริง</label>
+                    <input type="text" id="firstName" required placeholder="สมชาย">
+                </div>
+                <div class="form-group">
+                    <label>นามสกุล</label>
+                    <input type="text" id="lastName" required placeholder="ใจดี">
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>เพศ</label>
+                    <select id="gender" required>
+                        <option value="">เลือกเพศ</option>
+                        <option value="ชาย">ชาย</option>
+                        <option value="หญิง">หญิง</option>
+                        <option value="ไม่ระบุ">ไม่ระบุ</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>วันเกิด</label>
+                    <input type="date" id="birthday" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>เบอร์โทรศัพท์</label>
+                <input type="tel" id="phone" placeholder="08x-xxx-xxxx" pattern="[0-9]{10}" maxlength="10" required>
+            </div>
+
+            <div class="section-title">ที่อยู่จัดส่งสินค้า</div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>จังหวัด</label>
+                    <input type="text" id="province" placeholder="กทม." required>
+                </div>
+                <div class="form-group">
+                    <label>เขต / อำเภอ</label>
+                    <input type="text" id="amphure" placeholder="พญาไท" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>แขวง / ตำบล</label>
+                <input type="text" id="district" placeholder="สามเสนใน" required>
+            </div>
+
+            <div class="form-group">
+                <label>รายละเอียดที่อยู่</label>
+                <textarea id="addressDetail" placeholder="บ้านเลขที่, หมู่บ้าน, ซอย, ถนน" required></textarea>
+            </div>
+
+            <button type="submit" id="submitBtn" class="btn-submit">ยืนยันและรับแต้ม ✨</button>
+        </form>
+    </div>
+
+    <script>
+        const INJECTED_USER_ID = "<?= userId ?>";
+
+        async function main() {
+            try {
+                await liff.init({ liffId: "2009630242-iPO8WjV7" }); //2009630242-iPO8WjV7
+                if (!liff.isLoggedIn()) { liff.login(); return; }
+                const profile = await liff.getProfile();
+                
+                document.getElementById("userId").value = INJECTED_USER_ID || profile.userId;
+                document.getElementById("displayName").value = profile.displayName;
+            } catch (err) {
+                console.error("LIFF Error", err);
+            }
+        }
+
+        document.getElementById("regForm").addEventListener("submit", function(e) {
+            e.preventDefault();
+            const btn = document.getElementById("submitBtn");
+            const loader = document.getElementById("loading");
+            
+            btn.disabled = true;
+            loader.style.display = "flex";
+
+            const formData = {
+                userId: document.getElementById("userId").value,
+                displayName: document.getElementById("displayName").value,
+                firstName: document.getElementById("firstName").value,
+                lastName: document.getElementById("lastName").value,
+                gender: document.getElementById("gender").value,
+                phone: document.getElementById("phone").value,
+                birthday: document.getElementById("birthday").value,
+                province: document.getElementById("province").value,
+                amphure: document.getElementById("amphure").value,
+                district: document.getElementById("district").value,
+                addressDetail: document.getElementById("addressDetail").value
+            };
+
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    loader.style.display = "none";
+                    if (res === "Success") {
+                        alert("สมัครสมาชิกสำเร็จ! รับ 50 แต้มเรียบร้อยค่ะ ✨");
+                        liff.closeWindow();
+                    } else {
+                        alert(res);
+                        btn.disabled = false;
+                    }
+                })
+                .withFailureHandler(function(err) {
+                    loader.style.display = "none";
+                    btn.disabled = false;
+                    alert("ขออภัย ระบบขัดข้อง: " + err.message);
+                })
+                .registerNewMember(formData); 
+        });
+
+        main();
+    </script>
+</body>
+</html>
