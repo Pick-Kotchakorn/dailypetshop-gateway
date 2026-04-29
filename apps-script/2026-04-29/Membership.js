@@ -1,8 +1,9 @@
 /**
- * 👤 MEMBERSHIP.gs - Daily Pet Shop (Unified CRM)
+ * 👤 MEMBERSHIP.gs - Daily Pet Shop (Verified CRM)
+ * ระบบจัดการสมาชิกและคะแนนสะสม (Phase 3: Reward System Ready)
  */
 
-// Mapping คอลัมน์ตามลำดับ Data Analytics
+// Mapping คอลัมน์ตามลำดับฐานข้อมูล (ตรวจสอบแล้ว: ถูกต้องตาม CRM Analytics)
 const COL = {
   USER_ID: 1,        // A
   FULL_NAME: 2,      // B
@@ -24,434 +25,59 @@ const COL = {
 };
 
 /**
- * 🔍 ตรวจสอบว่ามี User ID นี้ในระบบแล้วหรือไม่
+ * 🔍 ตรวจสอบสมาชิกรายเดิม (Robust Comparison)
  */
 function isExistingMember(userId) {
   if (!userId) return false;
-
   try {
-
-    const ss =
-      SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-
-    const sheet =
-      ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
     if (!sheet) return false;
-
-    const data =
-      sheet.getDataRange().getValues();
-
-    if (data.length <= 1) return false;
-
-    // ตรวจสอบในคอลัมน์ A (User ID)
-
-    return data.some((row, idx) =>
-
-      idx > 0 &&
-      row[COL.USER_ID - 1] &&
-      row[COL.USER_ID - 1].toString() === userId.toString()
-
-    );
-
+    const data = sheet.getDataRange().getValues();
+    return data.some(row => row[COL.USER_ID - 1] && row[COL.USER_ID - 1].toString() === userId.toString());
   } catch (e) {
-
-    console.error("isExistingMember Error: " + e.message);
-
     return false;
   }
 }
 
 /**
- * 📝 ลงทะเบียนสมาชิกใหม่
+ * 👤 ดึงข้อมูลโปรไฟล์สมาชิก (สำหรับหน้า Index)
  */
-function registerNewMember(formData) {
-
-  const lock =
-    LockService.getScriptLock();
-
+function getCustomerProfile(userId) {
   try {
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
+    const data = sheet.getDataRange().getValues();
 
-    lock.waitLock(10000);
-
-    // ดักจับชั้นสุดท้ายบน Server
-
-    if (isExistingMember(formData.userId)) {
-
-      return "ลูกค้าเป็นสมาชิก Daily Pet Shop อยู่แล้วค่ะ ✨";
-    }
-
-    const ss =
-      SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-
-    const memberSheet =
-      ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-
-    const now = new Date();
-
-    const newRow =
-      new Array(25).fill('');
-
-    newRow[COL.USER_ID - 1] =
-      formData.userId;
-
-    newRow[COL.NICKNAME - 1] =
-      formData.nickname;
-
-    newRow[COL.GENDER - 1] =
-      formData.gender;
-
-    newRow[COL.BIRTHDAY - 1] =
-      formData.birthday;
-
-    newRow[COL.TEL - 1] =
-      formData.phone;
-
-    newRow[COL.PROVINCE - 1] =
-      formData.province;
-
-    newRow[COL.PET_INFO - 1] =
-      "";
-
-    newRow[COL.MEMBER_SINCE - 1] =
-      now;
-
-    newRow[COL.LAST_ACCESS - 1] =
-      now;
-
-    newRow[COL.TOTAL_VISITS - 1] =
-      1;
-
-    newRow[COL.STATUS - 1] =
-      'active';
-
-    newRow[COL.ADDED_FROM - 1] =
-      'LIFF Registration';
-
-    newRow[COL.CURRENT_POINTS - 1] =
-      50; // Welcome Points
-
-    newRow[COL.LIFETIME_POINTS - 1] =
-      50;
-
-    newRow[COL.TOTAL_SPENDING - 1] =
-      0;
-
-    newRow[COL.LEVEL - 1] =
-      'Bronze Friend';
-
-    memberSheet.appendRow(newRow);
-
-    // อัปเดตสถานะในชีท Followers (ถ้ามี)
-
-    updateFollowerToMember(formData.userId);
-
-    // ✅ เพิ่มการสลับ Rich Menu ทันทีหลังสมัครสำเร็จ
-
-    linkRichMenuToUser(
-      formData.userId,
-      CONFIG.RICH_MENU_ID_MEMBER
+    const idx = data.findIndex((row, i) => 
+      i > 0 && row[COL.USER_ID - 1] && row[COL.USER_ID - 1].toString() === userId.toString()
     );
 
-    return {
-      status: "Success",
-      name: formData.nickname,
-      points: 50,
-      level: "Bronze Friend"
-    };
+    if (idx === -1) return null;
 
+    const row = data[idx];
+    return {
+      name: row[COL.NICKNAME - 1] || "สมาชิก",
+      level: row[COL.LEVEL - 1] || "Bronze Friend",
+      points: Number(row[COL.CURRENT_POINTS - 1] || 0),
+      totalSpending: Number(row[COL.TOTAL_SPENDING - 1] || 0),
+      memberSince: row[COL.MEMBER_SINCE - 1] ? Utilities.formatDate(new Date(row[COL.MEMBER_SINCE - 1]), "GMT+7", "dd/MM/yyyy") : "-"
+    };
   } catch (e) {
-
-    return "เกิดข้อผิดพลาด: " + e.message;
-
-  } finally {
-
-    lock.releaseLock();
-  }
-}
-
-/**
- * 💰 บันทึกยอดซื้อ
- */
-function addTransaction(userId, amount) {
-
-  const lock =
-    LockService.getScriptLock();
-
-  try {
-
-    lock.waitLock(10000);
-
-    const ss =
-      SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-
-    const sheet =
-      ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-
-    const data =
-      sheet.getDataRange().getValues();
-
-    const rowIndex =
-      data.findIndex((row, idx) =>
-
-        idx > 0 &&
-        row[COL.USER_ID - 1].toString() === userId.toString()
-
-      );
-
-    if (rowIndex === -1)
-      throw new Error("ไม่พบข้อมูลสมาชิก");
-
-    const targetRow =
-      rowIndex + 1;
-
-    const currentData =
-      data[rowIndex];
-
-    const oldSpending =
-      Number(currentData[COL.TOTAL_SPENDING - 1]) || 0;
-
-    const oldPoints =
-      Number(currentData[COL.CURRENT_POINTS - 1]) || 0;
-
-    const oldLifetime =
-      Number(currentData[COL.LIFETIME_POINTS - 1]) || 0;
-
-    const oldVisits =
-      Number(currentData[COL.TOTAL_VISITS - 1]) || 0;
-
-    const newSpending =
-      oldSpending + amount;
-
-    const earned =
-      Math.floor(amount / 10);
-
-    const newPoints =
-      oldPoints + earned;
-
-    const newLifetime =
-      oldLifetime + earned;
-
-    const newLevel =
-      calculateLevel(newSpending);
-
-    sheet.getRange(targetRow, COL.TOTAL_SPENDING)
-      .setValue(newSpending);
-
-    sheet.getRange(targetRow, COL.CURRENT_POINTS)
-      .setValue(newPoints);
-
-    sheet.getRange(targetRow, COL.LIFETIME_POINTS)
-      .setValue(newLifetime);
-
-    sheet.getRange(targetRow, COL.LEVEL)
-      .setValue(newLevel);
-
-    sheet.getRange(targetRow, COL.TOTAL_VISITS)
-      .setValue(oldVisits + 1);
-
-    sheet.getRange(targetRow, COL.LAST_ACCESS)
-      .setValue(new Date());
-
-    return {
-      status: "success",
-      earnedPoints: earned,
-      newLevel: newLevel
-    };
-
-  } catch (e) {
-
-    return {
-      status: "error",
-      message: e.message
-    };
-
-  } finally {
-
-    lock.releaseLock();
-  }
-}
-
-function calculateLevel(spending) {
-
-  if (spending >= 10001)
-    return "Gold (VIP)";
-
-  if (spending >= 2001)
-    return "Silver (Member)";
-
-  return "Bronze Friend";
-}
-
-function updateFollowerToMember(userId) {
-
-  try {
-
-    const ss =
-      SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-
-    const sheet =
-      ss.getSheetByName(CONFIG.SHEET_NAME.FOLLOWERS);
-
-    const data =
-      sheet.getDataRange().getValues();
-
-    const idx =
-      data.findIndex((row, i) =>
-
-        i > 0 &&
-        row[0].toString() === userId.toString()
-
-      );
-
-    if (idx !== -1) {
-
-      // คอลัมน์ Status ในชีท Followers
-
-      sheet.getRange(idx + 1, 9)
-        .setValue('member');
-    }
-
-  } catch (e) {}
-}
-
-function getCustomerProfile(userId) {
-
-  try {
-
-    const ss =
-      SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-
-    const sheet =
-      ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-
-    const data =
-      sheet.getDataRange().getValues();
-
-    const idx =
-      data.findIndex((row, i) =>
-
-        i > 0 &&
-        row[COL.USER_ID - 1].toString() === userId.toString()
-
-      );
-
-    if (idx === -1)
-      return null;
-
-    const row =
-      data[idx];
-
-    return {
-
-      name:
-        row[COL.NICKNAME - 1] || "สมาชิก",
-
-      level:
-        row[COL.LEVEL - 1],
-
-      points:
-        row[COL.CURRENT_POINTS - 1],
-
-      totalSpending:
-        row[COL.TOTAL_SPENDING - 1],
-
-      memberSince:
-        Utilities.formatDate(
-          new Date(row[COL.MEMBER_SINCE - 1]),
-          "GMT+7",
-          "dd/MM/yyyy"
-        )
-    };
-
-  } catch (e) {
-
+    console.error("getCustomerProfile Error: " + e.message);
     return null;
   }
 }
 
 /**
- * 👑 ฟังก์ชันสำหรับ Admin: เพิ่มยอดซื้อและส่งการแจ้งเตือนหาลูกค้า (Push Message)
- * @param {string} userId - ID ของลูกค้า
- * @param {number} amount - ยอดเงินที่ซื้อ (บาท)
- * @param {string} note - เลขคำสั่งซื้อหรือหมายเหตุ
- */
-function addAdminTransaction(userId, amount, note) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000); 
-    
-    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-    const data = sheet.getDataRange().getValues();
-
-    const rowIndex = data.findIndex((row, idx) => idx > 0 && row[COL.USER_ID - 1] && row[COL.USER_ID - 1].toString() === userId.toString());
-    
-    if (rowIndex === -1) throw new Error("ไม่พบข้อมูลสมาชิกในระบบ");
-
-    const targetRow = rowIndex + 1;
-    const currentData = data[rowIndex];
-
-    // 1. ดึงข้อมูลเดิมและคำนวณ
-    const oldSpending = Number(currentData[COL.TOTAL_SPENDING - 1]) || 0;
-    const oldPoints = Number(currentData[COL.CURRENT_POINTS - 1]) || 0;
-    const oldLifetime = Number(currentData[COL.LIFETIME_POINTS - 1]) || 0;
-    const oldVisits = Number(currentData[COL.TOTAL_VISITS - 1]) || 0;
-    const oldLevel = currentData[COL.LEVEL - 1] || "Bronze Friend";
-
-    const newSpending = oldSpending + amount;
-    const earnedPoints = Math.floor(amount / 10);
-    const newPoints = oldPoints + earnedPoints;
-    const newLifetime = oldLifetime + earnedPoints;
-    const newLevel = calculateLevel(newSpending);
-
-    // 2. บันทึกข้อมูลลง Sheet
-    sheet.getRange(targetRow, COL.TOTAL_SPENDING).setValue(newSpending);
-    sheet.getRange(targetRow, COL.CURRENT_POINTS).setValue(newPoints);
-    sheet.getRange(targetRow, COL.LIFETIME_POINTS).setValue(newLifetime);
-    sheet.getRange(targetRow, COL.LEVEL).setValue(newLevel);
-    sheet.getRange(targetRow, COL.TOTAL_VISITS).setValue(oldVisits + 1);
-    sheet.getRange(targetRow, COL.LAST_ACCESS).setValue(new Date());
-
-    // 3. 💌 ส่งข้อความแจ้งเตือนหาลูกค้าทันที
-    let alertMsg = `✨ คุณได้รับแต้มใหม่จาก Daily Pet Shop!\n\n` +
-                   `💰 ยอดซื้อ: ฿${amount.toLocaleString()}\n` +
-                   `🎁 ได้รับแต้ม: +${earnedPoints} แต้ม\n` +
-                   `⭐ แต้มสะสมปัจจุบัน: ${newPoints} แต้ม`;
-    
-    if (newLevel !== oldLevel) {
-      alertMsg += `\n\n🎊 ยินดีด้วยค่ะ! คุณได้เลื่อนระดับเป็น ${newLevel} เรียบร้อยแล้ว 🐾`;
-    }
-
-    sendMessage(userId, alertMsg); // เรียกฟังก์ชันส่งข้อความจาก LineAPI.js
-
-    return {
-      status: "success",
-      customerName: currentData[COL.NICKNAME - 1] || "ลูกค้า",
-      newPoints: newPoints,
-      newLevel: newLevel
-    };
-
-  } catch (e) {
-    console.error("❌ addAdminTransaction Error: " + e.message);
-    return { status: "error", message: e.message };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/**
- * รวมข้อมูลสำหรับหน้าแลกรางวัล (คะแนนผู้ใช้ + รายการของรางวัล)
+ * 🎁 รวมข้อมูลสำหรับหน้าแลกรางวัล
  */
 function getRewardPageData(userId) {
   try {
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
     const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
-    if (!sheet) throw new Error("ไม่พบ Sheet ชื่อ " + CONFIG.SHEET_NAME.MEMBERS);
-    
     const data = sheet.getDataRange().getValues();
     
-    // ✅ เทียบ ID แบบปลอดภัย (Robust Comparison)
     const memberRow = data.find(row => 
       row[COL.USER_ID - 1] && row[COL.USER_ID - 1].toString() === userId.toString()
     );
@@ -464,46 +90,39 @@ function getRewardPageData(userId) {
     };
   } catch (e) {
     console.error("getRewardPageData Error: " + e.message);
-    throw new Error(e.message); // ส่ง Error กลับไปหา Client
+    return null;
   }
 }
 
 /**
- * 🎁 ดึงรายการของรางวัลจาก Sheet 'Rewards'
+ * 📜 ดึงรายการของรางวัลจาก Sheet 'Rewards'
  */
 function getRewardsList() {
   try {
     const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-    let sheet = ss.getSheetByName("Rewards"); // 🚩 ต้องมั่นใจว่าใน Google Sheets มีชื่อชีทนี้เป๊ะๆ
-    
-    if (!sheet) {
-      console.error("❌ ไม่พบ Sheet ชื่อ 'Rewards'");
-      return [];
-    }
+    const sheet = ss.getSheetByName("Rewards");
+    if (!sheet) return [];
     
     const data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return []; // มีแต่ Header
-    
-    const headers = data.shift(); // ดึง Header ออก
+    data.shift(); // ลบหัวตาราง
     
     return data
-      .filter(row => row[6] === "active") // กรองเอาเฉพาะ Status (คอลัมน์ G) ที่เป็น active
+      .filter(row => row[6] === "active")
       .map(row => ({
-        id: row[0],          // คอลัมน์ A
-        title: row[1],       // คอลัมน์ B
-        description: row[2], // คอลัมน์ C
-        points: row[3],      // คอลัมน์ D
-        stock: row[4],       // คอลัมน์ E
-        image: row[5]        // คอลัมน์ F
+        id: row[0],
+        title: row[1],
+        description: row[2],
+        points: Number(row[3]),
+        stock: Number(row[4]),
+        image: row[5]
       }));
   } catch (e) {
-    console.error("getRewardsList Error: " + e.message);
     return [];
   }
 }
 
 /**
- * 🛒 ฟังก์ชันสำหรับกดแลกของรางวัล (ใช้ใน Reward.html)
+ * 🛒 ฟังก์ชันสำหรับกดแลกของรางวัล (Safety Enhanced)
  */
 function redeemReward(userId, rewardId) {
   const lock = LockService.getScriptLock();
@@ -513,11 +132,12 @@ function redeemReward(userId, rewardId) {
     const memberSheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
     const rewardSheet = ss.getSheetByName("Rewards");
 
-    // 1. หาข้อมูลสมาชิกและของรางวัล
     const memberData = memberSheet.getDataRange().getValues();
-    const mIdx = memberData.findIndex(row => row[COL.USER_ID - 1] === userId);
+    const mIdx = memberData.findIndex(row => row[COL.USER_ID - 1] && row[COL.USER_ID - 1].toString() === userId.toString());
+    
     const rewardData = rewardSheet.getDataRange().getValues();
-    const rIdx = rewardData.findIndex(row => row[0] === rewardId);
+    // ✅ เพิ่มความปลอดภัย: เช็ค row[0] ก่อนเรียก .toString()
+    const rIdx = rewardData.findIndex(row => row[0] && row[0].toString() === rewardId.toString());
 
     if (mIdx === -1 || rIdx === -1) throw new Error("ไม่พบข้อมูลสมาชิกหรือของรางวัล");
 
@@ -525,20 +145,61 @@ function redeemReward(userId, rewardId) {
     const pointsNeeded = Number(rewardData[rIdx][3]);
     const stock = Number(rewardData[rIdx][4]);
 
-    // 2. ตรวจสอบเงื่อนไข
     if (stock <= 0) throw new Error("ขออภัย ของรางวัลหมดแล้วค่ะ");
     if (currentPoints < pointsNeeded) throw new Error("แต้มของคุณไม่เพียงพอ");
 
-    // 3. หักแต้มและสต็อก
     memberSheet.getRange(mIdx + 1, COL.CURRENT_POINTS).setValue(currentPoints - pointsNeeded);
     rewardSheet.getRange(rIdx + 1, 5).setValue(stock - 1);
 
-    // 4. แจ้งเตือนลูกค้า
     sendMessage(userId, `🎊 แลกสำเร็จ!\nคุณได้แลก: ${rewardData[rIdx][1]}\nหักแต้ม: -${pointsNeeded}\nแต้มคงเหลือ: ${currentPoints - pointsNeeded} แต้ม 🐾`);
 
     return { status: "success", message: "แลกรางวัลเรียบร้อยแล้วค่ะ" };
   } catch (e) {
     return { status: "error", message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 📝 ลงทะเบียนสมาชิกใหม่
+ */
+function registerNewMember(formData) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(CONFIG.SHEET_NAME.MEMBERS);
+    
+    if (isExistingMember(formData.userId)) return "คุณเป็นสมาชิกอยู่แล้วค่ะ";
+
+    const initialPoints = 10;
+    const now = new Date();
+    
+    const newRow = new Array(25).fill("");
+    newRow[COL.USER_ID - 1] = formData.userId;
+    newRow[COL.FULL_NAME - 1] = formData.fullName;
+    newRow[COL.NICKNAME - 1] = formData.nickname;
+    newRow[COL.GENDER - 1] = formData.gender;
+    newRow[COL.TEL - 1] = formData.phone;
+    newRow[COL.PROVINCE - 1] = formData.province;
+    newRow[COL.MEMBER_SINCE - 1] = now;
+    newRow[COL.LAST_ACCESS - 1] = now;
+    newRow[COL.TOTAL_VISITS - 1] = 1;
+    newRow[COL.STATUS - 1] = "active";
+    newRow[COL.CURRENT_POINTS - 1] = initialPoints;
+    newRow[COL.LIFETIME_POINTS - 1] = initialPoints;
+    newRow[COL.TOTAL_SPENDING - 1] = 0;
+    newRow[COL.LEVEL - 1] = "Bronze Friend";
+
+    sheet.appendRow(newRow);
+    
+    // เชื่อมต่อ Rich Menu สำหรับสมาชิก
+    linkRichMenuToUser(formData.userId, "richmenu-a8ca5156afc1998337b1772d90d0e6e0");
+
+    return { status: "Success", name: formData.nickname, points: initialPoints, level: "Bronze Friend" };
+  } catch (e) {
+    return "Error: " + e.message;
   } finally {
     lock.releaseLock();
   }

@@ -14,17 +14,17 @@ function doGet(e) {
     
     const template = HtmlService.createTemplateFromFile(page);
     
-    // 🚩 ส่งตัวแปร userId ไปให้ Template เสมอเพื่อกัน Error
+    // ✅ ส่ง userId ไปให้ Template เสมอเพื่อป้องกัน Error <?= userId ?> พัง
     template.userId = e.parameter.userId || ""; 
     
     return template.evaluate()
-      .setTitle('Daily Pet Shop - Member System')
+      .setTitle('Daily Pet Shop')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
       
   } catch (error) {
-    // แสดง Error จริงๆ เพื่อให้เรา Debug ได้ง่ายขึ้นครับ
-    return HtmlService.createHtmlOutput("❌ ระบบขัดข้อง: " + error.toString());
+    // แสดง Error จริงเพื่อให้คุณ Pick ตรวจสอบได้ง่ายขึ้น
+    return HtmlService.createHtmlOutput("<div style='color:#c54327; padding:20px;'>❌ ระบบขัดข้อง: " + error.toString() + "</div>");
   }
 }
 
