@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Daily Pet Club - สมัครสมาชิก</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #C84528; --bg: #C84528; --box-bg: #ffffff;
+      --box-border: #532f16; --text: #532f16;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Kanit', sans-serif; background-color: var(--bg);
+      color: var(--text); margin: 0; display: flex; justify-content: center;
+      align-items: center; min-height: 100vh; padding: 10px; overflow: hidden;
+    }
+    .container {
+      background: white; width: 100%; max-width: 400px; border-radius: 20px;
+      padding: 12px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    .header-logo { text-align: center; margin-bottom: 10px; }
+    .header-logo h2 { color: var(--primary); margin: 0; font-size: 1.4rem; line-height: 1.2; }
+    .form-group { display: flex; flex-direction: column; margin-bottom: 8px; }
+    label { display: block; margin-bottom: 4px; font-weight: 500; font-size: 0.85rem; }
+    input, select {
+      width: 100%; height: 42px; padding: 0 12px; border: 1.2px solid var(--box-border);
+      border-radius: 10px; font-size: 14px; font-family: 'Kanit', sans-serif;
+      background-color: var(--box-bg); color: var(--text); outline: none;
+      appearance: none; -webkit-appearance: none; box-sizing: border-box;
+    }
+    input[type="date"] { line-height: normal; min-height: 42px; }
+    button {
+      width: 100%; padding: 12px; background-color: var(--primary); color: white;
+      border: none; border-radius: 12px; font-size: 16px; font-weight: 600;
+      cursor: pointer; margin-top: 12px; transition: 0.3s; font-family: 'Kanit', sans-serif;
+    }
+    button:active { transform: scale(0.98); }
+    button:disabled { background-color: #ccc; cursor: not-allowed; }
+    #loader { text-align: center; margin-top: 8px; color: var(--primary); font-size: 0.85rem; display: none; }
+    #success-screen { display: none; text-align: center; }
+    .welcome-msg { line-height: 1.4; margin: 15px 0; font-size: 0.9rem; }
+    .highlight { color: var(--primary); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div id="registration-page" class="container">
+    <div class="header-logo"><h2>สมัครสมาชิก<br>Daily Pet Club</h2></div>
+    <div class="form-group"><label>ชื่อไลน์</label><input type="text" id="fullname" placeholder="กำลังโหลดข้อมูล..." readonly></div>
+    <div class="form-group"><label>ชื่อเล่น <span style="color:red;">*</span></label><input type="text" id="nickname" placeholder="กรุณาระบุ"></div>
+    <div class="form-group"><label>เบอร์โทรศัพท์ <span style="color:red;">*</span></label><input type="tel" id="phone" placeholder="08xxxxxxxx" maxlength="10"></div>
+    <div class="form-group">
+      <label>เพศ</label>
+      <select id="gender"><option value="">ระบุเพศ</option><option value="ผู้ชาย">ผู้ชาย</option><option value="ผู้หญิง">ผู้หญิง</option><option value="LGBTQIA+">LGBTQIA+</option></select>
+    </div>
+    <div class="form-group"><label>วันเกิด <span style="color:red;">*</span></label><input type="date" id="birthday"></div>
+    <div class="form-group"><label>จังหวัดที่อยู่</label><select id="province"><option value="">เลือกจังหวัด</option></select></div>
+    <div class="form-group"><label>สัตว์เลี้ยง</label><input type="text" id="petinfo" placeholder="เช่น แมว 2 ตัว / หมา 1 ตัว"></div>
+    <button id="btn-submit" onclick="submitForm()">ยืนยันและรับ 50 แต้มฟรี!</button>
+    <div id="loader">กำลังบันทึกข้อมูล... 🐾</div>
+  </div>
+
+  <div id="success-screen" class="container">
+    <div style="font-size: 40px; text-align: center;">🐾</div>
+    <h2 style="color: var(--primary); text-align: center; font-size: 1.3rem;">Welcome to<br>Daily Pet Club</h2>
+    <div class="welcome-msg">ยินดีต้อนรับสู่ครอบครัว <span class="highlight">Daily Pet Shop 💛</span><br><br>เรามอบแต้มพิเศษฟรี <span class="highlight">50 แต้ม</span><br>สำหรับการสะสมแลกสิทธิพิเศษภายในร้าน ✨</div>
+    <button onclick="closeLiffWindow()">เข้าสู่หน้าหลัก</button>
+  </div>
+
+  <script>
+    let userId = "";
+    const provinces = ["กรุงเทพมหานคร","กระบี่","กาญจนบุรี","กาฬสินธุ์","กำแพงเพชร","ขอนแก่น","จันทบุรี","ฉะเชิงเทรา","ชลบุรี","ชัยนาท","ชัยภูมิ","ชุมพร","เชียงราย","เชียงใหม่","ตรัง","ตราด","ตาก","นครนายก","นครปฐม","นครพนม","นครราชสีมา","นครศรีธรรมราช","นครสวรรค์","นนทบุรี","นราธิวาส","น่าน","บึงกาฬ","บุรีรัมย์","ปทุมธานี","ประจวบคีรีขันธ์","ปราจีนบุรี","ปัตตานี","พระนครศรีอยุธยา","พะเยา","พังงา","พัทลุง","พิจิตร","พิษณุโลก","เพชรบุรี","เพชรบูรณ์","แพร่","ภูเก็ต","มหาสารคาม","มุกดาหาร","แม่ฮ่องสอน","ยโสธร","ยะลา","ร้อยเอ็ด","ระนอง","ระยอง","ราชบุรี","ลพบุรี","ลำปาง","ลำพูน","เลย","ศรีสะเกษ","สกลนคร","สงขลา","สตูล","สมุทรปราการ","สมุทรสงคราม","สมุทรสาคร","สระแก้ว","สระบุรี","สิงห์บุรี","สุโขทัย","สุพรรณบุรี","สุราษฎร์ธานี","สุรินทร์","หนองคาย","หนองบัวลำภู","อ่างทอง","อำนาจเจริญ","อุดรธานี","อุตรดิตถ์","อุทัยธานี","อุบลราชธานี"];
+
+    function loadProvinces() {
+      const provinceSelect = document.getElementById('province');
+      provinces.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p; option.textContent = p;
+        provinceSelect.appendChild(option);
+      });
+    }
+
+    function closeLiffWindow() {
+      liff.closeWindow(); // 🚩 ปิดหน้าต่าง LIFF ทันทีตามต้องการ
+    }
+
+    async function main() {
+      const btn = document.getElementById('btn-submit');
+      const fullnameInput = document.getElementById('fullname');
+      try {
+        btn.disabled = false;
+        btn.innerText = "ยืนยันและรับ 50 แต้มฟรี!"; // ✅ ปุ่มทำงานทันที
+        await liff.init({ liffId: "2009630242-iPO8WjV7" });
+        if (liff.isLoggedIn()) {
+          const profile = await liff.getProfile();
+          userId = profile.userId; // 🚩 พยายามดึง ID เพื่อใช้ผูกกับเบอร์โทรศัพท์
+          fullnameInput.value = profile.displayName || "";
+        }
+      } catch (err) {
+        console.warn("LIFF Load Fail: ระบบจะใช้เบอร์โทรศัพท์ในการสมัครแทน", err);
+      }
+    }
+
+    function submitForm() {
+      const data = {
+        userId: userId,
+        fullname: document.getElementById('fullname').value.trim(),
+        nickname: document.getElementById('nickname').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        gender: document.getElementById('gender').value,
+        birthday: document.getElementById('birthday').value,
+        province: document.getElementById('province').value,
+        petinfo: document.getElementById('petinfo').value.trim()
+      };
+
+      if (!data.phone || !data.nickname || !data.birthday) {
+        alert("กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบถ้วนค่ะ");
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit');
+      const loader = document.getElementById('loader');
+      btn.disabled = true;
+      loader.style.display = "block";
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (res.status === "Success") {
+            document.getElementById('registration-page').style.display = 'none';
+            document.getElementById('success-screen').style.display = 'block';
+          } else {
+            alert("❌ " + res.message);
+            btn.disabled = false;
+            loader.style.display = "none";
+          }
+        })
+        .registerNewMember(data); // 🚩 ส่งไปตรวจสอบเบอร์โทรซ้ำที่ฝั่ง Membership
+    }
+
+    loadProvinces();
+    main();
+  </script>
+</body>
+</html>

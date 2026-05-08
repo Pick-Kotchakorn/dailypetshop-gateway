@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Daily Pet Shop</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --primary: #C84528; --bg: #f4f4f9; --text: #333; }
+    body { font-family: 'Kanit', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+    .admin-header h1 { color: var(--primary); margin: 0; font-size: 1.8rem; }
+
+    .reward-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    
+    .reward-item { background: white; border-radius: 15px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #ddd; }
+    .reward-item img { width: 100%; height: 150px; object-fit: cover; border-radius: 10px; margin-bottom: 10px; }
+    .reward-title { font-weight: 600; font-size: 1.1rem; margin-bottom: 5px; }
+    .reward-meta { font-size: 0.9rem; color: #666; margin-bottom: 15px; }
+    
+    .stock-control { display: flex; gap: 10px; align-items: center; background: #f9f9f9; padding: 10px; border-radius: 10px; }
+    .stock-input { width: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 5px; text-align: center; font-size: 1rem; }
+    
+    .btn-save { background: var(--primary); color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; transition: 0.2s; }
+    .btn-save:hover { background: #a63921; }
+    .btn-save:disabled { background: #ccc; }
+
+    #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p style="margin-left:15px;">กำลังเชื่อมต่อระบบ Admin...</p>
+  </div>
+
+  <div class="container">
+    <div class="admin-header">
+      <h1>🐾 Admin Inventory</h1>
+      <div id="admin-name" style="font-weight: 500;"></div>
+    </div>
+
+    <div class="reward-grid" id="reward-grid">
+      </div>
+  </div>
+
+  <script>
+    async function main() {
+      try {
+        // 1. ดึง LIFF ID จาก Config ผ่าน Server
+        google.script.run.withSuccessHandler(async (liffId) => {
+          await liff.init({ liffId: liffId });
+          if (liff.isLoggedIn()) {
+            const profile = await liff.getProfile();
+            checkAdminAuth(profile);
+          } else {
+            liff.login();
+          }
+        }).getLiffIdConfig();
+      } catch (err) {
+        alert("LIFF Error: " + err.message);
+      }
+    }
+
+    // 2. ตรวจสอบสิทธิ์ว่าเป็น Admin หรือไม่
+    function checkAdminAuth(profile) {
+      google.script.run.withSuccessHandler((isAdmin) => {
+        if (isAdmin) {
+          document.getElementById('admin-name').innerText = "สวัสดีคุณ " + profile.displayName;
+          loadRewards();
+        } else {
+          alert("❌ คุณไม่มีสิทธิ์เข้าถึงหน้านี้");
+          liff.closeWindow();
+        }
+      }).checkIsAdmin(profile.userId); // ต้องใช้ฟังก์ชันใน Config.js หรือ Membership.gs
+    }
+
+    // 3. โหลดรายการของรางวัล
+    function loadRewards() {
+      google.script.run.withSuccessHandler((rewards) => {
+        const grid = document.getElementById('reward-grid');
+        grid.innerHTML = '';
+        
+        rewards.forEach(item => {
+          const card = `
+            <div class="reward-item">
+              <img src="${item.image || 'https://via.placeholder.com/300'}" alt="reward">
+              <div class="reward-title">${item.title}</div>
+              <div class="reward-meta">💰 ราคา: ${item.points} แต้ม</div>
+              <div class="stock-control">
+                <span>สต็อกปัจจุบัน:</span>
+                <input type="number" class="stock-input" id="stock-${item.id}" value="${item.stock}">
+                <button class="btn-save" onclick="updateStock('${item.id}')">บันทึก</button>
+              </div>
+            </div>
+          `;
+          grid.insertAdjacentHTML('beforeend', card);
+        });
+        document.getElementById('loading-overlay').style.display = 'none';
+      }).getAdminRewardList(); // เรียกฟังก์ชันที่เราสร้างไว้ใน Server รอบที่แล้ว
+    }
+
+    // 4. ฟังก์ชันอัปเดตสต็อก
+    function updateStock(id) {
+      const newStock = document.getElementById(`stock-${id}`).value;
+      if (newStock < 0) return alert("สต็อกห้ามติดลบครับ");
+
+      document.getElementById('loading-overlay').style.display = 'flex';
+      google.script.run.withSuccessHandler((res) => {
+        if (res.status === "Success") {
+          alert("อัปเดตสต็อกสำเร็จ!");
+        } else {
+          alert("Error: " + res.message);
+        }
+        loadRewards();
+      }).updateRewardStock(id, newStock);
+    }
+
+    main();
+  </script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Rewards - Daily Pet Shop</title>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { 
+      --primary: #C84528; 
+      --gold: #faaf73; 
+      --bg: #FFF4EF; 
+      --text: #4A3F35; 
+    }
+    body { font-family: 'Kanit', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
+    .header { background: var(--primary); color: white; padding: 30px 20px; text-align: center; border-radius: 0 0 30px 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .header h1 { margin: 0; font-size: 1.5rem; letter-spacing: 1px; }
+    .user-points { background: rgba(255,255,255,0.2); display: inline-block; padding: 5px 20px; border-radius: 20px; margin-top: 10px; font-weight: 500; }
+    
+    .reward-container { padding: 20px; display: grid; grid-template-columns: 1fr; gap: 20px; }
+    
+    .reward-card { 
+      background: white; border-radius: 20px; overflow: hidden; 
+      box-shadow: 0 6px 15px rgba(0,0,0,0.05); border: 1px solid #eee;
+      display: flex; flex-direction: column;
+    }
+    
+    /* Optimize Image Container for Lazy Loading */
+    .img-wrapper {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #f0f0f0;
+      overflow: hidden;
+    }
+    .reward-img { 
+      width: 100%; height: 100%; object-fit: cover; 
+      transition: transform 0.3s;
+    }
+    .reward-card:hover .reward-img { transform: scale(1.05); }
+
+    .reward-info { padding: 15px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .reward-title { font-weight: 600; font-size: 1.1rem; color: var(--primary); margin-bottom: 5px; }
+    .reward-pts { font-size: 0.9rem; color: #888; }
+    .reward-stock { font-size: 0.8rem; color: #e67e22; font-weight: 500; }
+    
+    .btn-redeem { 
+      background: var(--primary); color: white; border: none; 
+      padding: 10px 20px; border-radius: 12px; font-family: 'Kanit';
+      font-weight: 500; cursor: pointer; transition: 0.2s;
+    }
+    .btn-redeem:disabled { background: #ccc; cursor: not-allowed; }
+    
+    #loading { 
+      position: fixed; top:0; left:0; width:100%; height:100%; 
+      background: rgba(255,255,255,0.9); display: flex; 
+      flex-direction: column; justify-content: center; 
+      align-items: center; z-index: 1000; 
+    }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p style="margin-top:15px;">🐾 กำลังโหลดของรางวัล...</p>
+  </div>
+
+  <div class="header">
+    <h1 id="shop-name">DAILY PET REWARDS</h1>
+    <div class="user-points">คะแนนของคุณ: <span id="user-pts">0</span> Pt</div>
+  </div>
+
+  <div class="reward-container" id="reward-list">
+    </div>
+
+  <script>
+    let userProfile = null;
+    let currentPoints = 0;
+
+    async function main() {
+      try {
+        // ✨ ดึง LIFF_ID จาก Config ผ่านฝั่ง Server เพื่อความยืดหยุ่น
+        google.script.run.withSuccessHandler(async (liffId) => {
+          await liff.init({ liffId: liffId });
+          if (liff.isLoggedIn()) {
+            userProfile = await liff.getProfile();
+            loadRewards();
+          } else {
+            liff.login();
+          }
+        }).getLiffIdConfig(); // ต้องสร้างฟังก์ชันนี้ใน GAS
+      } catch (err) {
+        console.error("LIFF Error:", err);
+      }
+    }
+
+    function loadRewards() {
+      google.script.run
+        .withSuccessHandler(data => {
+          currentPoints = data.userPoints;
+          document.getElementById('user-pts').innerText = currentPoints.toLocaleString();
+          renderRewards(data.rewards);
+          document.getElementById('loading').style.display = 'none';
+        })
+        .getRewardList(userProfile.userId);
+    }
+
+    function renderRewards(rewards) {
+      const list = document.getElementById('reward-list');
+      list.innerHTML = '';
+      
+      rewards.forEach(item => {
+        const pts = Number(item.points);
+        const isAffordable = currentPoints >= pts;
+        const hasStock = Number(item.stock) > 0;
+        
+        // 🖼️ เพิ่ม loading="lazy" และสัดส่วนภาพที่แน่นอนเพื่อ Performance
+        const cardHtml = `
+          <div class="reward-card">
+            <div class="img-wrapper">
+              <img src="${item.image || 'https://via.placeholder.com/600x338?text=Daily+Pet+Shop'}" 
+                   class="reward-img" 
+                   loading="lazy" 
+                   alt="${item.title}">
+            </div>
+            <div class="reward-info">
+              <div>
+                <div class="reward-title">${item.title}</div>
+                <div class="reward-pts">🌟 ${pts.toLocaleString()} แต้ม</div>
+                <div class="reward-stock">คงเหลือ ${item.stock} ชิ้น</div>
+              </div>
+              <button class="btn-redeem" 
+                ${(!isAffordable || !hasStock) ? 'disabled' : ''} 
+                onclick="handleRedeem('${item.id}', '${item.title}', ${pts})">
+                ${!hasStock ? 'หมดแล้ว' : !isAffordable ? 'แต้มไม่พอ' : 'แลกรางวัล'}
+              </button>
+            </div>
+          </div>`;
+        list.insertAdjacentHTML('beforeend', cardHtml);
+      });
+    }
+
+    function handleRedeem(id, title, pts) {
+      if (confirm(`คุณต้องการใช้ ${pts.toLocaleString()} แต้ม เพื่อแลก "${title}" ใช่หรือไม่?`)) {
+        document.getElementById('loading').style.display = 'flex';
+        google.script.run
+          .withSuccessHandler(res => {
+            alert(res.message);
+            location.reload();
+          })
+          .withFailureHandler(err => {
+            alert("ขออภัย ระบบขัดข้อง: " + err.message);
+            document.getElementById('loading').style.display = 'none';
+          })
+          .redeemReward(userProfile.userId, id); // เรียกใช้ฟังก์ชันที่เพิ่มใน Membership.gs
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
