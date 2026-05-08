@@ -8,7 +8,7 @@
 
 // 📌 ปักหมุด URL ปลายทาง
 const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwIzSOuWgZfZ5Bf4pK_d1oRS1XX7i-s89tZaD6rsYrPBO6Iu1OmMyETg_lYikjCC-M/exec';
-const WEBHOOK_SITE_URL = 'https://webhook.site/d5cc4ad6-7286-4879-ba7a-0455d0a53d2b';
+const WEBHOOK_SITE_URL = 'https://webhook.site/99c7d467-91a0-402e-b8ac-0ceb8d38ffd4';
 const DIALOGFLOW_ENDPOINT = 'https://dialogflow.cloud.google.com/v1/integrations/line/webhook/a0ab3d28-5a9a-4234-a76a-ba77b0bd197e';
 
 export default {
