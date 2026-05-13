@@ -1,10 +1,6 @@
-/**
- * 🛠️ dailypetshop-gateway (Phase 3 - Connectivity Fix)
- */
-
-// 📌 ปักหมุด URL ที่ถูกต้องที่สุด (Single Source of Truth)
+// 📌 ปักหมุด URL ปลายทางที่ทำงานได้จริง (ยืนยันจาก Log Status 200)
 const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwIzSOuWgZfZ5Bf4pK_d1oRS1XX7i-s89tZaD6rsYrPBO6Iu1OmMyETg_lYikjCC-M/exec';
-const AI_BRAIN_URL = 'https://dailypet-ai-worker.pickky-kotchakorn.workers.dev'; // ตัด / ออก
+const AI_SYSTEM_URL = 'https://dailypet-ai-worker.pickky-kotchakorn.workers.dev'; 
 const WEBHOOK_SITE_URL = 'https://webhook.site/99c7d467-91a0-402e-b8ac-0ceb8d38ffd4';
 
 export default {
@@ -14,7 +10,9 @@ export default {
     const signature = request.headers.get('x-line-signature');
     const bodyText = await request.text();
 
-    if (!signature || bodyText === '{}' || bodyText.length < 5) return new Response('OK', { status: 200 });
+    if (!signature || bodyText === '{}' || bodyText.length < 5) {
+      return new Response('OK', { status: 200 });
+    }
 
     const channelSecret = env.LINE_CHANNEL_SECRET;
     if (!channelSecret) return new Response('Config Error', { status: 500 });
@@ -22,11 +20,11 @@ export default {
     const isValid = await verifyLineSignature(bodyText, channelSecret, signature);
     if (!isValid) return new Response('Unauthorized', { status: 403 });
 
-    console.log('✅ Signature Validated. Forwarding...');
+    console.log('✅ Signature Validated. Forwarding to AI & GAS...');
 
     const endpoints = [
       { name: 'Google Apps Script', url: GAS_ENDPOINT, enabled: true },
-      { name: 'AI System Brain', url: AI_BRAIN_URL, enabled: true },
+      { name: 'AI System Brain', url: AI_SYSTEM_URL, enabled: true },
       { name: 'Webhook.site (Debug)', url: WEBHOOK_SITE_URL, enabled: env.ENABLE_DEBUG === 'true' }
     ];
 
@@ -55,7 +53,9 @@ async function forwardToMultipleEndpoints(endpoints, body, signature) {
         body: body
       });
       console.log(`✅ ${endpoint.name} Status: ${response.status}`);
-    } catch (err) { console.error(`❌ ${endpoint.name} Error:`, err.message); }
+    } catch (err) {
+      console.error(`❌ ${endpoint.name} Error:`, err.message);
+    }
   });
   await Promise.allSettled(promises);
 }
