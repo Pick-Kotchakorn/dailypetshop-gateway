@@ -1,22 +1,30 @@
 /**
- * 🤖 DIALOGFLOWSERVICE.gs - Daily Pet Shop (AI Brain)
- * จัดการระบบ NLP: เพิ่มระบบ Retry Logic และ Error Handling ระดับ Production
+ * 🤖 DIALOGFLOWSERVICE.gs - Daily Pet Shop (AI Brain V2.5)
+ * เพิ่มระบบ Smart Context: ส่งข้อมูล Profile เข้า Session Parameters
  */
 
-/**
- * 🧠 1. วิเคราะห์ข้อความด้วย Dialogflow ES
- * @param {string} userId - ID ของผู้ใช้ (Session ID)
- * @param {string} message - ข้อความจากลูกค้า
- * @param {number} retryCount - จำนวนครั้งที่ลองใหม่ (Default: 3)
- */
 function detectIntent(userId, message, retryCount = 3) {
+  // ดึงข้อมูล Context มาเตรียมไว้ (ถ้าเป็นสมาชิก)
+  const profile = getCustomerProfile(userId);
+  let contexts = [];
+
+  if (profile) {
+    contexts.push({
+      "name": `projects/${CONFIG.DF_PROJECT_ID}/agent/sessions/${userId}/contexts/user_profile`,
+      "lifespanCount": 5,
+      "parameters": {
+        "user_name": profile.name,
+        "pet_info": profile.petInfo || "ไม่ระบุ",
+        "membership_tier": profile.tier,
+        "current_points": profile.points
+      }
+    });
+  }
+
   try {
     const projectId = CONFIG.DF_PROJECT_ID; 
     const accessToken = getGoogleAccessToken();
-    
-    if (!accessToken) {
-      throw new Error("ระบบไม่สามารถสร้าง Google Access Token ได้");
-    }
+    if (!accessToken) throw new Error("Google Access Token Error");
 
     const url = `https://dialogflow.googleapis.com/v2/projects/${projectId}/agent/sessions/${userId}:detectIntent`;
     
@@ -26,6 +34,9 @@ function detectIntent(userId, message, retryCount = 3) {
           "text": message,
           "languageCode": "th"
         }
+      },
+      "queryParams": {
+        "contexts": contexts
       }
     };
 
@@ -39,48 +50,27 @@ function detectIntent(userId, message, retryCount = 3) {
       "muteHttpExceptions": true
     };
 
-    // ระบบประมวลผลพร้อม Retry Logic
     let response;
     let attempt = 0;
-    
     while (attempt < retryCount) {
       response = UrlFetchApp.fetch(url, options);
-      if (response.getResponseCode() === 200) break; // สำเร็จ ให้หยุด Loop
+      if (response.getResponseCode() === 200) break;
       attempt++;
-      Utilities.sleep(500); // พัก 0.5 วินาทีก่อนลองใหม่
+      Utilities.sleep(500); 
     }
 
-    const responseData = JSON.parse(response.getContentText());
-
-    if (response.getResponseCode() !== 200) {
-      console.error(`❌ Dialogflow Error (Attempt ${attempt}):`, responseData);
-      throw new Error("Dialogflow API ไม่ตอบสนองตามปกติ");
-    }
-
-    return responseData;
-
+    return JSON.parse(response.getContentText());
   } catch (e) {
-    console.error("❌ detectIntent Critical Error: " + e.message);
-    // ส่ง Fallback Response กรณี AI พังจริงๆ เพื่อไม่ให้ระบบหยุดทำงาน
-    return {
-      queryResult: {
-        fulfillmentText: "ขออภัยค่ะ น้องแมวกำลังยุ่งอยู่นิดหน่อย รบกวนลองใหม่อีกครั้งนะคะ 🐾",
-        intent: { displayName: "Fallback_Error" }
-      }
-    };
+    console.error("❌ Dialogflow Error: " + e.message);
+    return null;
   }
 }
 
 /**
- * 🔑 2. สร้าง Access Token ผ่าน Service Account
- * (ต้องการ Library OAuth2: 1B7FSrk5Zi6L1rSxxTDgDEUsPzlukDsi4KGuTMorsTQHhGBzBkMun4iDF)
+ * 🔑 สร้าง Access Token สำหรับ Google Cloud
  */
 function getGoogleAccessToken() {
-  if (typeof OAuth2 === 'undefined') {
-    console.error("❌ ลืมติดตั้ง Library OAuth2 หรือไม่?");
-    return null;
-  }
-
+  if (typeof OAuth2 === 'undefined') return null;
   try {
     const service = OAuth2.createService('Dialogflow')
       .setTokenUrl('https://oauth2.googleapis.com/token')
@@ -89,33 +79,6 @@ function getGoogleAccessToken() {
       .setPropertyStore(PropertiesService.getScriptProperties())
       .setScope('https://www.googleapis.com/auth/dialogflow');
 
-    if (service.hasAccess()) {
-      return service.getAccessToken();
-    } else {
-      console.error('❌ OAuth2 Access Error: ' + service.getLastError());
-      return null;
-    }
-  } catch (e) {
-    console.error("❌ getGoogleAccessToken Error: " + e.message);
-    return null;
-  }
-}
-
-/**
- * 🧪 3. ฟังก์ชันสำหรับทดสอบการเชื่อมต่อ
- */
-function testAIConnection() {
-  const result = detectIntent("test_user", "สวัสดี");
-  
-  // พิมพ์ผลลัพธ์ทั้งหมดออกมาดูโครงสร้าง
-  console.log("🔍 Full JSON Response:", JSON.stringify(result));
-
-  if (result && result.queryResult) {
-    const replyText = result.queryResult.fulfillmentText;
-    console.log("🤖 AI Reply:", replyText || "⚠️ ไม่มีข้อความตอบกลับในระบบ Dialogflow");
-    
-    // ตรวจสอบชื่อ Intent ที่ตรวจพบ
-    const intentName = result.queryResult.intent ? result.queryResult.intent.displayName : "ไม่พบ Intent";
-    console.log("🎯 Matched Intent:", intentName);
-  }
+    return service.hasAccess() ? service.getAccessToken() : null;
+  } catch (e) { return null; }
 }

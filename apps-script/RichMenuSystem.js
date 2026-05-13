@@ -1,19 +1,38 @@
 /**
- * 👑 RICHMENUSYSTEM.gs - Daily Pet Shop (Production Version 2.2)
+ * 👑 RICHMENUSYSTEM.gs - Daily Pet Shop (Production Version 3.1)
  * แก้ไขปุ่ม MEMBER CARD ให้ส่งข้อความแทนการเปิด URI เพื่อรองรับ Dialogflow Workflow
+ *
+ * Fixes v3.1:
+ *   [R1] RICH_CONFIG — ย้าย LIFF_URL ออกจาก top-level const เพราะ GAS evaluate
+ *        object literal ตอน script load (ก่อน getConfig() ถูกเรียก) ทำให้
+ *        CONFIG.LIFF_URL ยัง undefined → fallback เป็น hardcoded URL เสมอ
+ *        แก้ไข: คง RICH_CONFIG ไว้เป็นค่า layout คงที่เท่านั้น และเพิ่ม
+ *        getLiffUrl() ที่อ่าน getConfig().LIFF_URL แบบ lazy ตอนถูกเรียกจริง
+ *   [R2] createVisitorMenus() — สร้างแค่ Home tab เดียว แต่ getTabAreas('visitor')
+ *        อ้าง ALIAS.VISITOR.SHOP และ ALIAS.VISITOR.REWARD ซึ่งยังไม่มี rich menu
+ *        จริง → LINE richmenuswitch fail silently ทุกครั้งที่ visitor แตะแท็บ
+ *        แก้ไข: สร้าง Visitor_Shop และ Visitor_Reward ให้ครบทั้ง 3 tabs
  */
 
+// ── Layout constants only — ห้ามอ่าน CONFIG ที่นี่ (eval ตอน script load) ──
 const RICH_CONFIG = {
   WIDTH: 2500,
   HEIGHT: 1686,
   TAB_HEIGHT: 250,
-  BUTTON_WIDTH: 833, 
-  BUTTON_HEIGHT: 718, 
+  BUTTON_WIDTH: 833,
+  BUTTON_HEIGHT: 718,
   ROW1_Y: 250,
-  ROW2_Y: 968, 
-  // ดึงค่าจาก Config กลางเพื่อความแม่นยำ[cite: 2, 12, 18]
-  LIFF_URL: (typeof CONFIG !== 'undefined' && CONFIG.LIFF_URL) ? CONFIG.LIFF_URL : "https://liff.line.me/2009630242-iPO8WjV7"
+  ROW2_Y: 968
 };
+
+/**
+ * [R1] Lazy LIFF URL reader — เรียกตอนที่ฟังก์ชัน upload ทำงานจริง
+ * เพื่อให้ getConfig() โหลด Script Properties แล้วก่อนเสมอ
+ * @returns {string} LIFF base URL
+ */
+function getLiffUrl() {
+  return getConfig().LIFF_URL || '';
+}
 
 /**
  * 🛠️ Helper: สร้างพื้นที่สำหรับ Tab ด้านบน (Home, Shop, Reward)
@@ -48,8 +67,8 @@ function createMemberMenus() {
       { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW1_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ข่าวสาร" } },
       { "bounds": { "x": 0, "y": RICH_CONFIG.ROW2_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "เช็คแต้มสะสม" } },
       
-      // ปุ่ม Settings: ไปหน้าแก้ไขโปรไฟล์ (LIFF)[cite: 10, 12]
-      { "bounds": { "x": 833, "y": RICH_CONFIG.ROW2_Y, "width": 834, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri", "uri": `${RICH_CONFIG.LIFF_URL}?page=Registration` } },
+      // ปุ่ม Settings: ไปหน้าแก้ไขโปรไฟล์ (LIFF) — [R1] ใช้ getLiffUrl() แทน RICH_CONFIG.LIFF_URL
+      { "bounds": { "x": 833, "y": RICH_CONFIG.ROW2_Y, "width": 834, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri", "uri": `${getLiffUrl()}?page=Registration` } },
       
       { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW2_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ปรึกษาโภชนาการ" } }
     ]
@@ -81,7 +100,7 @@ function createMemberMenus() {
       { "bounds": { "x": 0, "y": RICH_CONFIG.ROW1_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ของรางวัล" } },
       { "bounds": { "x": 833, "y": RICH_CONFIG.ROW1_Y, "width": 834, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "วิธีสะสมแต้ม" } },
       { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW1_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "คูปองส่วนลด" } },
-      { "bounds": { "x": 0, "y": RICH_CONFIG.ROW2_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri", "uri": `${RICH_CONFIG.LIFF_URL}?page=Reward` } },
+      { "bounds": { "x": 0, "y": RICH_CONFIG.ROW2_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri", "uri": `${getLiffUrl()}?page=Reward` } },
       { "bounds": { "x": 833, "y": RICH_CONFIG.ROW2_Y, "width": 834, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "แต้มของฉัน" } },
       { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW2_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ลุ้นรางวัล" } }
     ]
@@ -90,25 +109,65 @@ function createMemberMenus() {
 }
 
 /** 
- * 🐾 2. VISITOR TABS (ศูนย์ลงทะเบียนสำหรับลูกค้าใหม่)
+ * 🐾 2. VISITOR TABS
+ * [R2] เพิ่ม Visitor_Shop และ Visitor_Reward ให้ครบ 3 tabs
+ *      เดิมมีแค่ Visitor_Home แต่ getTabAreas('visitor') อ้าง ALIAS.VISITOR.SHOP
+ *      และ ALIAS.VISITOR.REWARD ซึ่งยังไม่มี rich menu จริง → richmenuswitch fail
+ *
+ *      Visitor tabs ทำหน้าที่เชิญชวนให้สมัครสมาชิก จึงใช้ภาพเดิม (homeImg)
+ *      และทุกปุ่มหลักชี้ไปที่หน้า Registration เพื่อ conversion
  */
 function createVisitorMenus() {
-  const regUrl = `${RICH_CONFIG.LIFF_URL}?page=Registration`;
+  const liffUrl = getLiffUrl(); // [R1] lazy read
+  const regUrl  = `${liffUrl}?page=Registration`;
   const homeImg = "https://i.postimg.cc/GmNPpHzR/1.png";
 
+  // ── Tab Home: Hero banner สมัครสมาชิก ────────────────────────────────────
   const visitorHome = {
     "size": { "width": RICH_CONFIG.WIDTH, "height": RICH_CONFIG.HEIGHT },
     "selected": true, "name": "Visitor_Home", "chatBarText": "ยินดีต้อนรับ 🐾",
     "areas": [
       ...getTabAreas('visitor'),
-      // ปุ่ม Hero สำหรับสมัครสมาชิก (ครอบคลุมแถวที่ 1 ทั้งหมด)
-      { "bounds": { "x": 0, "y": RICH_CONFIG.ROW1_Y, "width": 2500, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri", "uri": regUrl } },
-      { "bounds": { "x": 0, "y": RICH_CONFIG.ROW2_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "สิทธิพิเศษสมาชิก" } },
-      { "bounds": { "x": 833, "y": RICH_CONFIG.ROW2_Y, "width": 834, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "วิธีสะสมแต้ม" } },
-      { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW2_Y, "width": 833, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ปรึกษาโภชนาการ" } }
+      // ปุ่ม Hero ครอบคลุมแถวที่ 1 ทั้งหมด
+      { "bounds": { "x": 0,    "y": RICH_CONFIG.ROW1_Y, "width": 2500, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri",     "uri":  regUrl } },
+      { "bounds": { "x": 0,    "y": RICH_CONFIG.ROW2_Y, "width": 833,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "สิทธิพิเศษสมาชิก" } },
+      { "bounds": { "x": 833,  "y": RICH_CONFIG.ROW2_Y, "width": 834,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "วิธีสะสมแต้ม" } },
+      { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW2_Y, "width": 833,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ปรึกษาโภชนาการ" } }
     ]
   };
   uploadRichMenu(visitorHome, homeImg, CONFIG.ALIAS.VISITOR.HOME);
+
+  // ── Tab Shop: แสดงสินค้าเบื้องต้น + เชิญสมัครสมาชิกเพื่อรับสิทธิ์ ──────
+  // [R2] สร้าง Visitor_Shop ให้ ALIAS.VISITOR.SHOP มี rich menu จริง
+  const visitorShop = {
+    "size": { "width": RICH_CONFIG.WIDTH, "height": RICH_CONFIG.HEIGHT },
+    "selected": false, "name": "Visitor_Shop", "chatBarText": "สินค้าของเรา 🛒",
+    "areas": [
+      ...getTabAreas('visitor'),
+      { "bounds": { "x": 0,    "y": RICH_CONFIG.ROW1_Y, "width": 833,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "อาหารแมว" } },
+      { "bounds": { "x": 833,  "y": RICH_CONFIG.ROW1_Y, "width": 834,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ทรายแมว" } },
+      { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW1_Y, "width": 833,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "อุปกรณ์สัตว์เลี้ยง" } },
+      // แถว 2: เชิญชวนสมัครสมาชิก
+      { "bounds": { "x": 0,    "y": RICH_CONFIG.ROW2_Y, "width": 2500, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri",     "uri":  regUrl } }
+    ]
+  };
+  uploadRichMenu(visitorShop, homeImg, CONFIG.ALIAS.VISITOR.SHOP);
+
+  // ── Tab Reward: ตัวอย่างของรางวัล + เชิญสมัครสมาชิกเพื่อแลกรางวัล ───────
+  // [R2] สร้าง Visitor_Reward ให้ ALIAS.VISITOR.REWARD มี rich menu จริง
+  const visitorReward = {
+    "size": { "width": RICH_CONFIG.WIDTH, "height": RICH_CONFIG.HEIGHT },
+    "selected": false, "name": "Visitor_Reward", "chatBarText": "ของรางวัล 🎁",
+    "areas": [
+      ...getTabAreas('visitor'),
+      { "bounds": { "x": 0,    "y": RICH_CONFIG.ROW1_Y, "width": 833,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "สิทธิพิเศษสมาชิก" } },
+      { "bounds": { "x": 833,  "y": RICH_CONFIG.ROW1_Y, "width": 834,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "วิธีสะสมแต้ม" } },
+      { "bounds": { "x": 1667, "y": RICH_CONFIG.ROW1_Y, "width": 833,  "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "message", "text": "ของรางวัล" } },
+      // แถว 2: Hero CTA สมัครสมาชิกเพื่อแลกของรางวัล
+      { "bounds": { "x": 0,    "y": RICH_CONFIG.ROW2_Y, "width": 2500, "height": RICH_CONFIG.BUTTON_HEIGHT }, "action": { "type": "uri",     "uri":  regUrl } }
+    ]
+  };
+  uploadRichMenu(visitorReward, homeImg, CONFIG.ALIAS.VISITOR.REWARD);
 }
 
 /**

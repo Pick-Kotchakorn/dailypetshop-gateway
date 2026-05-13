@@ -1,14 +1,65 @@
 /**
- * 🧠 EVENTHANDLER.gs - Daily Pet Shop (Production Engine - Version 2.1)
- * จัดการ LINE Events: ตัดการ Hard Code ข้อความ และรองรับ Dynamic Workflow จาก Dialogflow
+ * 🧠 EVENTHANDLER.js - Daily Pet Shop (Production Ready — v3.1)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * การแก้ไขจาก v3.0:
+ *   [FIX-09] handleUnfollowEvent(): เปลี่ยน updateFollowerStatus() → updateUnfollowStatus()
+ *            เพราะ SheetService.js export ชื่อ updateUnfollowStatus() เท่านั้น
+ *            updateFollowerStatus() ไม่มีในโค้ดจริง → silent ReferenceError ทุกครั้งที่ user block
+ *   [FIX-10] handlePostbackEvent(): เพิ่ม userId เป็น arg ที่ 4 ของ handleNutritionStep()
+ *            signature จริงคือ handleNutritionStep(userId, step, value, replyToken)
+ *            เดิมส่งแค่ 3 args → replyToken = undefined → NutritionService ใช้ replyMessage(undefined,...) → 400
+ *            หลังจาก NutritionService.js ถูกแก้เป็น push-based แล้ว arg ที่ 4 จะเป็น userId
+ *            (ดูรายละเอียด NutritionService.js v3.1)
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * การแก้ไขจาก v3.0 (คงเดิมทุกจุด):
+ *   [FIX-01] ลบ handleDialogflowFulfillment() ออก — ย้ายไปอยู่ที่ Main.js เพียงที่เดียว
+ *   [FIX-02] แก้ isExistingMember() ที่ไม่มีในโค้ด → ใช้ getCustomerProfile() แทน
+ *   [FIX-03] แก้ Reply Token Timing — ย้าย getUserProfile() และ detectIntent()
+ *            ไปทำก่อน แล้วค่อย reply เพื่อลดความเสี่ยง token expired
+ *            และเปลี่ยนมาใช้ push message สำหรับ async flow ที่ใช้เวลานาน
+ *   [FIX-04] แก้ CONFIG → getConfig() ทุกจุด
+ *   [FIX-05] เพิ่ม structured error handling ทุก handler
+ *   [FIX-06] แก้ Nutrition trigger ให้ส่ง push message แทน reply
+ *            เพราะ startNutritionConsultation ใช้เวลานานเกิน token lifetime
+ *   [FIX-07] เพิ่ม guard สำหรับ postback data parsing ป้องกัน malformed input
+ *   [FIX-08] แยก buildLineTextResponse() เป็น helper ลด code duplication
+ *
+ * Dependencies:
+ *   - Config.js        (getConfig)
+ *   - SheetService.js  (saveFollowerData, saveLog, updateFollowerInteraction,
+ *                       updateUnfollowStatus)          ← [FIX-09] ชื่อที่ถูกต้อง
+ *   - LineAPI.js       (sendMessage, sendLoadingAnimation, markAsRead,
+ *                       getUserProfile, linkRichMenuToUser, replyMessage)
+ *   - Membership.js    (getCustomerProfile)
+ *   - DialogflowService.js (detectIntent)
+ *   - FlexService.js   (createDynamicMemberCard)
+ *   - NutritionService.js  (startNutritionConsultation, handleNutritionStep)
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
+
+// =============================================================================
+// 🎯 1. handleEvent() — Main Event Router
+// =============================================================================
+
+/**
+ * จุดเข้าหลักสำหรับ LINE events ทั้งหมด
+ * ถูกเรียกจาก doPost() ใน Main.js
+ *
+ * @param {object} event - LINE Webhook Event object
+ */
 function handleEvent(event) {
-  const userId = event.source.userId;
-  if (!userId) return;
+  if (!event || !event.source || !event.source.userId) {
+    console.warn('⚠️ [handleEvent] Event missing userId — skipping');
+    return;
+  }
+
+  const userId    = event.source.userId;
+  const eventType = event.type || 'unknown';
 
   try {
-    switch (event.type) {
+    switch (eventType) {
       case 'follow':
         handleFollowEvent(event);
         break;
@@ -22,204 +73,418 @@ function handleEvent(event) {
         handleUnfollowEvent(event);
         break;
       default:
-        console.log("ℹ️ Unhandled event type: " + event.type);
+        console.log(`ℹ️ [handleEvent] Unhandled event type: "${eventType}" from userId: ${userId}`);
     }
   } catch (err) {
-    console.error(`❌ Error handling ${event.type}: ${err.message}`);
-    saveLog({ 
-      userId: userId, 
-      displayName: "System Error",
-      intent: "ERROR", 
-      userMessage: `Event: ${event.type}`,
-      botReply: err.message 
-    });
+    console.error(`❌ [handleEvent] Uncaught error in "${eventType}" handler: ${err.message}\nStack: ${err.stack}`);
+
+    // บันทึก error ลง log โดยไม่ throw ต่อ
+    // ป้องกัน doPost() fail ซึ่งจะทำให้ LINE ทำ retry
+    try {
+      saveLog({
+        userId:      userId,
+        displayName: 'System Error',
+        userMessage: `Event: ${eventType}`,
+        intent:      'ERROR',
+        botReply:    err.message
+      });
+    } catch (logErr) {
+      console.error('❌ [handleEvent] saveLog also failed:', logErr.message);
+    }
   }
 }
 
+
+// =============================================================================
+// 👤 2. handleFollowEvent() — จัดการการเพิ่มเพื่อน
+// =============================================================================
+
 /**
- * 👤 1. จัดการการเพิ่มเพื่อน (Follow Event)
+ * จัดการ Follow Event
+ *
+ * [FIX-02] ใช้ getCustomerProfile() แทน isExistingMember() ที่ไม่มีในโค้ด
+ *          → สมาชิกเก่าที่ block แล้ว re-follow จะได้ Member menu ถูกต้อง
+ *
+ * @param {object} event - LINE Follow Event
  */
 function handleFollowEvent(event) {
   const userId = event.source.userId;
-  sendLoadingAnimation(userId);
-  
-  const profile = getUserProfile(userId) || { displayName: "ลูกค้าใหม่" };
-  const isMember = (typeof isExistingMember === 'function') ? isExistingMember(userId) : false;
 
-  saveFollowerData({
-    userId: userId,
-    displayName: profile.displayName || "ลูกค้า",
-    pictureUrl: profile.pictureUrl || "",
-    language: profile.language || 'th',
-    statusMessage: profile.statusMessage || '',
-    source: event.source.type || 'user'
-  });
-
-  const targetAlias = isMember ? CONFIG.ALIAS.MEMBER.HOME : CONFIG.ALIAS.VISITOR.HOME;
-  linkRichMenuToUser(userId, targetAlias);
-
-  saveLog({
-    userId: userId,
-    displayName: profile.displayName || "ลูกค้า",
-    userMessage: "[Follow Event]",
-    intent: "FOLLOW",
-    botReply: isMember ? "Welcome Back Member" : "New Visitor Joined"
-  });
-}
-
-function handleMessageEvent(event) {
-  if (event.message.type !== 'text') return;
-
-  const userId = event.source.userId;
-  const replyToken = event.replyToken; // เก็บ Token สำหรับใช้ตอบกลับฟรีและรวดเร็ว
-  const userMessage = event.message.text.trim(); // ใช้ trim() เพื่อความแม่นยำในการเช็กคำสั่ง
-
-  // ✨ [ปรับปรุง] ดักจับคำสั่ง และส่งต่อ replyToken ไปยังระบบโภชนาการ
-  if (userMessage === CONFIG.NUTRITION.TRIGGER_TEXT) {
-    startNutritionConsultation(userId, replyToken); // ส่งต่อทั้ง userId และ replyToken
-    return; // จบการทำงานทันทีเพื่อไม่ให้ไปรันส่วน Dialogflow ต่อ
+  // ดึงโปรไฟล์ LINE
+  let profile = { displayName: 'ลูกค้าใหม่', pictureUrl: '', language: 'th', statusMessage: '' };
+  try {
+    const fetched = getUserProfile(userId);
+    if (fetched) profile = fetched;
+  } catch (e) {
+    console.warn(`⚠️ [handleFollowEvent] getUserProfile failed: ${e.message}`);
   }
 
+  // [FIX-02] ตรวจสอบสมาชิกด้วย getCustomerProfile() ที่มีในโค้ดจริง
+  let isMember = false;
   try {
-    markAsRead(userId);         
-    sendLoadingAnimation(userId);
+    isMember = getCustomerProfile(userId) !== null;
+  } catch (e) {
+    console.warn(`⚠️ [handleFollowEvent] getCustomerProfile failed: ${e.message}`);
+  }
 
-    const profile = getUserProfile(userId) || { displayName: 'ลูกค้า' };
-    const dfResponse = detectIntent(userId, userMessage);
-    const queryResult = dfResponse.queryResult;
-    
-    const intentName = queryResult.intent ? queryResult.intent.displayName : 'Default Fallback Intent';
-    let fulfillmentText = queryResult.fulfillmentText;
-    
-    // ตรวจสอบข้อมูล Payload จาก Dialogflow
-    const hasPayload = queryResult.fulfillmentMessages && queryResult.fulfillmentMessages.some(m => m.payload);
+  // บันทึกข้อมูล Follower
+  try {
+    saveFollowerData({
+      userId:        userId,
+      displayName:   profile.displayName  || 'ลูกค้า',
+      pictureUrl:    profile.pictureUrl   || '',
+      language:      profile.language     || 'th',
+      statusMessage: profile.statusMessage || '',
+      source:        event.source.type    || 'user'
+    });
+  } catch (e) {
+    console.error(`❌ [handleFollowEvent] saveFollowerData failed: ${e.message}`);
+  }
 
-    updateFollowerInteraction(userId);
+  // ผูก Rich Menu ตามสถานะสมาชิก
+  const cfg         = getConfig();
+  const targetAlias = isMember
+    ? cfg.ALIAS.MEMBER.HOME
+    : cfg.ALIAS.VISITOR.HOME;
 
-    let finalBotReply = "";
+  try {
+    linkRichMenuToUser(userId, targetAlias);
+  } catch (e) {
+    console.error(`❌ [handleFollowEvent] linkRichMenuToUser failed: ${e.message}`);
+  }
 
-    // 🛠️ CASE 1: หากมีการส่ง Custom Payload
-    if (hasPayload) {
-      let lineMessages = queryResult.fulfillmentMessages
-        .filter(m => m.payload && m.payload.line)
-        .map(m => m.payload.line);
-      
-      if (lineMessages.length > 0 && typeof createDynamicMemberCard === 'function') {
-        lineMessages = createDynamicMemberCard(userId, lineMessages);
-      }
+  // บันทึก Log
+  try {
+    saveLog({
+      userId:      userId,
+      displayName: profile.displayName || 'ลูกค้า',
+      userMessage: '[Follow Event]',
+      intent:      'FOLLOW',
+      botReply:    isMember ? 'Welcome Back Member' : 'New Visitor Joined'
+    });
+  } catch (e) {
+    console.error(`❌ [handleFollowEvent] saveLog failed: ${e.message}`);
+  }
+}
 
-      sendMessage(userId, lineMessages);
-      finalBotReply = "Flex/Payload from Dialogflow (Replaced ###)";
-    } 
-    // 🛠️ CASE 2: หากเป็นการตอบกลับแบบ Text ธรรมดา
-    else if (fulfillmentText) {
-      if (typeof createDynamicMemberCard === 'function') {
-        fulfillmentText = createDynamicMemberCard(userId, fulfillmentText);
-      }
 
-      let responseObj = { "type": "text", "text": fulfillmentText };
-      
-      if (intentName === 'Default Fallback Intent' || intentName === 'main-menu') {
-        responseObj.quickReply = {
-          "items": [
-            { "type": "action", "action": { "type": "message", "label": "ติดต่อแอดมิน", "text": "ติดต่อแอดมิน" } },
-            { "type": "action", "action": { "type": "message", "label": "โปรโมชั่นสมาชิก", "text": "โปรโมชั่นสมาชิก" } },
-            { "type": "action", "action": { "type": "message", "label": "เมนูหลัก", "text": "เมนูหลัก" } }
-          ]
-        };
-      }
-      
-      sendMessage(userId, responseObj);
-      finalBotReply = fulfillmentText;
+// =============================================================================
+// 💬 3. handleMessageEvent() — จัดการข้อความ
+// =============================================================================
+
+/**
+ * จัดการ Message Event (รองรับเฉพาะ text message)
+ *
+ * [FIX-03] ลำดับการทำงานใหม่:
+ *   1. ดึง profile + เรียก Dialogflow ก่อน (operations ที่ใช้เวลา)
+ *   2. ค่อย send response หลังจากมีข้อมูลครบ
+ *   3. ใช้ push message แทน reply สำหรับ async flow
+ *      → reply token มีอายุ 30 วินาที ถ้าทำ API calls หลายตัวก่อนจะ expired
+ *
+ * [FIX-06] Nutrition flow ใช้ push message แทน reply
+ *
+ * @param {object} event - LINE Message Event
+ */
+function handleMessageEvent(event) {
+  // รองรับเฉพาะ text message
+  if (!event.message || event.message.type !== 'text') {
+    console.log('ℹ️ [handleMessageEvent] Non-text message — skipping');
+    return;
+  }
+
+  const userId      = event.source.userId;
+  const replyToken  = event.replyToken;
+  const userMessage = event.message.text.trim();
+  const cfg         = getConfig();
+
+  // ── [FIX-06] ดักจับ Nutrition trigger ────────────────────────────────────
+  // Nutrition flow ใช้เวลานาน → ใช้ push message แทน reply
+  // ส่ง loading animation ทันทีเพื่อ UX แล้วค่อย push result
+  if (userMessage === cfg.NUTRITION.TRIGGER_TEXT) {
+    try {
+      sendLoadingAnimation(userId);
+      // ส่ง userId เท่านั้น ไม่ส่ง replyToken เพราะ nutrition flow ใช้เวลา > 30 วินาที
+      startNutritionConsultation(userId);
+    } catch (e) {
+      console.error(`❌ [handleMessageEvent] Nutrition trigger failed: ${e.message}`);
+      _safePushMessage(userId, 'ขออภัยค่ะ ระบบโภชนาการขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งนะคะ 🐾');
+    }
+    return;
+  }
+
+  // ── Main Dialogflow Flow ──────────────────────────────────────────────────
+  try {
+    // Step 1: Mark as read (fire-and-forget ไม่ต้องรอ)
+    try { markAsRead(userId); } catch (e) { /* non-critical */ }
+
+    // Step 2: Loading animation (fire-and-forget)
+    try { sendLoadingAnimation(userId); } catch (e) { /* non-critical */ }
+
+    // Step 3: ดึง Profile (ทำก่อน Dialogflow เพื่อใช้ใน log)
+    let profile = { displayName: 'ลูกค้า' };
+    try {
+      const fetched = getUserProfile(userId);
+      if (fetched) profile = fetched;
+    } catch (e) {
+      console.warn(`⚠️ [handleMessageEvent] getUserProfile failed: ${e.message}`);
     }
 
-    saveLog({
-      userId: userId,
-      displayName: profile.displayName || "ลูกค้า",
-      userMessage: userMessage,
-      intent: intentName,
-      botReply: finalBotReply || "(No Response)"
-    });
+    // Step 4: เรียก Dialogflow [FIX-03] ทำก่อน reply เพื่อให้มีข้อมูลก่อน token expire
+    let dfResponse = null;
+    try {
+      dfResponse = detectIntent(userId, userMessage);
+    } catch (e) {
+      console.error(`❌ [handleMessageEvent] detectIntent failed: ${e.message}`);
+    }
+
+    // Step 5: อัปเดต interaction (non-critical)
+    try { updateFollowerInteraction(userId); } catch (e) { /* non-critical */ }
+
+    // Step 6: ประมวลผล Dialogflow response และส่งข้อความ
+    let finalBotReply = '';
+    let intentName    = 'Unknown';
+
+    if (!dfResponse || !dfResponse.queryResult) {
+      // Dialogflow ไม่ตอบ → ส่ง fallback
+      finalBotReply = 'ขออภัยค่ะ ระบบ AI ขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งนะคะ 🐾';
+      _safePushMessage(userId, finalBotReply);
+
+    } else {
+      const queryResult = dfResponse.queryResult;
+      intentName = (queryResult.intent && queryResult.intent.displayName)
+        ? queryResult.intent.displayName
+        : 'Default Fallback Intent';
+
+      const fulfillmentText = queryResult.fulfillmentText || '';
+      const hasPayload = (queryResult.fulfillmentMessages || [])
+        .some(m => m.payload && m.payload.line);
+
+      if (hasPayload) {
+        // ── CASE 1: Custom Payload (Flex Message) ──────────────────────────
+        finalBotReply = _handlePayloadResponse(userId, queryResult);
+
+      } else if (fulfillmentText) {
+        // ── CASE 2: Text Response ──────────────────────────────────────────
+        finalBotReply = _handleTextResponse(userId, intentName, fulfillmentText);
+
+      } else {
+        // ── CASE 3: ไม่มีทั้ง payload และ text ───────────────────────────
+        console.warn(`⚠️ [handleMessageEvent] No fulfillment content for intent: ${intentName}`);
+        finalBotReply = 'ขออภัยค่ะ ไม่พบคำตอบสำหรับคำถามนี้ 🐾';
+        _safePushMessage(userId, finalBotReply);
+      }
+    }
+
+    // Step 7: บันทึก Log
+    try {
+      saveLog({
+        userId:      userId,
+        displayName: profile.displayName || 'ลูกค้า',
+        userMessage: userMessage,
+        intent:      intentName,
+        botReply:    finalBotReply || '(No Response)'
+      });
+    } catch (e) {
+      console.error(`❌ [handleMessageEvent] saveLog failed: ${e.message}`);
+    }
 
   } catch (error) {
-    console.error("❌ Error in handleMessageEvent:", error);
-    saveLog({ userId: userId, displayName: "System Error", intent: "ERROR", botReply: error.toString() });
+    console.error(`❌ [handleMessageEvent] Unexpected error: ${error.message}\nStack: ${error.stack}`);
+    // Fallback push message เพื่อไม่ให้ลูกค้าเงียบหาย
+    _safePushMessage(userId, 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งนะคะ 🐾');
   }
 }
 
+
+// =============================================================================
+// 🔘 4. handlePostbackEvent() — จัดการการกดปุ่ม
+// =============================================================================
+
 /**
- * 🔘 3. จัดการการกดปุ่ม (Postback Event)
+ * จัดการ Postback Event
+ *
+ * [FIX-07] เพิ่ม guard สำหรับ postback data parsing
+ *          ป้องกัน malformed data ทำให้ระบบ crash
+ *
+ * [FIX-10] แก้ argument mismatch ใน handleNutritionStep():
+ *          เดิม: handleNutritionStep(userId, step, params.value)   ← ขาด arg ที่ 4
+ *          ใหม่: handleNutritionStep(userId, step, params.value, userId)
+ *          NutritionService.js v3.1 เปลี่ยนเป็น push-based แล้ว
+ *          → arg ที่ 4 ที่รับคือ userId (ใช้แทน replyToken เดิม)
+ *
+ * @param {object} event - LINE Postback Event
  */
 function handlePostbackEvent(event) {
-  const userId = event.source.userId;
-  const replyToken = event.replyToken; // เก็บ Token จากปุ่มกด
-  const data = event.postback.data; 
+  const userId     = event.source.userId;
+  const replyToken = event.replyToken;
+  const rawData    = (event.postback && event.postback.data) ? event.postback.data : '';
 
-  if (data && data.includes("action=nutrition")) {
-    const params = {};
-    data.split("&").forEach(p => {
-      const v = p.split("=");
-      params[v[0]] = v[1];
-    });
-
-    if (params.step && params.value) {
-      // ส่ง replyToken ต่อไปที่ handleNutritionStep
-      handleNutritionStep(userId, parseInt(params.step), params.value, replyToken);
-    }
+  if (!rawData) {
+    console.warn(`⚠️ [handlePostbackEvent] Empty postback data from userId: ${userId}`);
+    return;
   }
+
+  // [FIX-07] Parse postback data อย่างปลอดภัย
+  let params = {};
+  try {
+    rawData.split('&').forEach(pair => {
+      const parts = pair.split('=');
+      if (parts.length === 2) {
+        params[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+      }
+    });
+  } catch (e) {
+    console.error(`❌ [handlePostbackEvent] Failed to parse postback data: "${rawData}" — ${e.message}`);
+    return;
+  }
+
+  // Route: Nutrition Quiz
+  if (params.action === 'nutrition' && params.step && params.value) {
+    const step = parseInt(params.step, 10);
+
+    // Validate step range
+    if (isNaN(step) || step < 1 || step > getConfig().NUTRITION.QUESTION_STEPS) {
+      console.warn(`⚠️ [handlePostbackEvent] Invalid nutrition step: ${params.step}`);
+      return;
+    }
+
+    try {
+      // [FIX-10] ส่ง userId เป็น arg ที่ 4 แทน replyToken
+      // NutritionService.js v3.1 ใช้ sendMessage(userId,...) แบบ push-based ทั้งหมดแล้ว
+      // replyToken จาก postback event ไม่ถูกใช้ใน Nutrition flow เพราะ
+      // handleNutritionStep อาจใช้เวลา > 30 วินาที (อ่าน/เขียน sheet)
+      handleNutritionStep(userId, step, params.value, userId);
+    } catch (e) {
+      console.error(`❌ [handlePostbackEvent] handleNutritionStep failed: ${e.message}`);
+      _safePushMessage(userId, 'ขออภัยค่ะ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งนะคะ 🐾');
+    }
+    return;
+  }
+
+  // Route: อื่นๆ (เพิ่ม handler ได้ในอนาคต)
+  console.log(`ℹ️ [handlePostbackEvent] Unhandled postback action: "${params.action}" from userId: ${userId}`);
 }
 
+
+// =============================================================================
+// 🚫 5. handleUnfollowEvent() — จัดการการบล็อก
+// =============================================================================
+
 /**
- * 🚫 4. จัดการการบล็อก (Unfollow Event)
+ * จัดการ Unfollow Event
+ *
+ * [FIX-09] เปลี่ยน updateFollowerStatus(userId, 'blocked') → updateUnfollowStatus(userId)
+ *          เพราะ SheetService.js นิยามเฉพาะ updateUnfollowStatus() เท่านั้น
+ *          updateFollowerStatus() ไม่มีในโค้ดจริง → ReferenceError ทุกครั้งที่ user block bot
+ *          updateUnfollowStatus() ทำหน้าที่เดียวกัน: set status = 'blocked' + update timestamp
+ *
+ * LINE ไม่ส่ง userId กับ Unfollow event ใน บาง case → guard ไว้
+ *
+ * @param {object} event - LINE Unfollow Event
  */
 function handleUnfollowEvent(event) {
-  const userId = event.source.userId;
-  updateFollowerStatus(userId, "blocked");
+  const userId = event.source && event.source.userId;
+  if (!userId) {
+    console.warn('⚠️ [handleUnfollowEvent] No userId in unfollow event');
+    return;
+  }
+
+  try {
+    // [FIX-09] updateFollowerStatus → updateUnfollowStatus (ชื่อที่ถูกต้องใน SheetService.js)
+    updateUnfollowStatus(userId);
+    console.log(`ℹ️ [handleUnfollowEvent] userId ${userId} marked as blocked`);
+  } catch (e) {
+    console.error(`❌ [handleUnfollowEvent] updateUnfollowStatus failed: ${e.message}`);
+  }
+}
+
+
+// =============================================================================
+// 🔑 6. Private Helpers
+// =============================================================================
+
+/**
+ * จัดการ response แบบ Custom Payload (Flex Message)
+ * [FIX-08] แยกออกมาลด complexity ของ handleMessageEvent
+ *
+ * @param  {string} userId      - LINE User ID
+ * @param  {object} queryResult - Dialogflow queryResult
+ * @returns {string}             botReply string สำหรับ log
+ */
+function _handlePayloadResponse(userId, queryResult) {
+  let lineMessages = (queryResult.fulfillmentMessages || [])
+    .filter(m => m.payload && m.payload.line)
+    .map(m => m.payload.line);
+
+  if (lineMessages.length === 0) {
+    console.warn('⚠️ [_handlePayloadResponse] Payload flag true but no line payload found');
+    return '(Empty Payload)';
+  }
+
+  // inject ข้อมูลสมาชิกแทน placeholder ### (ถ้ามีฟังก์ชัน)
+  try {
+    if (typeof createDynamicMemberCard === 'function') {
+      lineMessages = lineMessages.map(msg => createDynamicMemberCard(userId, msg));
+    }
+  } catch (e) {
+    console.warn(`⚠️ [_handlePayloadResponse] createDynamicMemberCard failed: ${e.message}`);
+  }
+
+  _safePushMessage(userId, lineMessages);
+  return 'Flex/Payload from Dialogflow';
 }
 
 /**
- * 🧠 จัดการ Webhook Fulfillment จาก Dialogflow (เวอร์ชันอัปเดต รองรับการค้นหาด้วยเบอร์โทร)
- * @doc ทำหน้าที่รับข้อมูลจาก Dialogflow, ดึง userId, และส่งเบอร์โทรศัพท์ไปประมวลผล Flex Message
+ * จัดการ response แบบ Text
+ * [FIX-08] แยกออกมาลด complexity ของ handleMessageEvent
+ *
+ * @param  {string} userId          - LINE User ID
+ * @param  {string} intentName      - Dialogflow intent display name
+ * @param  {string} fulfillmentText - ข้อความจาก Dialogflow
+ * @returns {string}                 finalBotReply สำหรับ log
  */
-function handleDialogflowFulfillment(body) {
-  const queryResult = body.queryResult;
-  const intentName = queryResult.intent.displayName;
-  
-  // 1. ดึง userId จากโครงสร้างของ LINE ที่ส่งผ่าน Dialogflow
-  let userId = "";
+function _handleTextResponse(userId, intentName, fulfillmentText) {
+  let text = fulfillmentText;
+
+  // inject ข้อมูลสมาชิกแทน placeholder ### (ถ้ามีฟังก์ชัน)
   try {
-    userId = body.originalDetectIntentRequest.payload.data.source.userId;
+    if (typeof createDynamicMemberCard === 'function') {
+      text = createDynamicMemberCard(userId, text);
+    }
   } catch (e) {
-    console.error("❌ ไม่สามารถดึง userId ได้: " + e.message);
+    console.warn(`⚠️ [_handleTextResponse] createDynamicMemberCard failed: ${e.message}`);
   }
 
-  // 2. ตรวจสอบ Intent และความพร้อมของข้อมูล
-  if (intentName === 'member-check-points' && userId) {
-    
-    // 📱 ดึงเบอร์โทรศัพท์จาก Parameters ที่ลูกค้าพิมพ์เข้ามา
-    const parameters = queryResult.parameters;
-    const phone = parameters['phone-number'] || parameters['phone'];
+  // สร้าง message object
+  const responseObj = { type: 'text', text: String(text) };
 
-    // ดึง Fulfillment Messages ทั้งหมดมาจาก Dialogflow
-    let messages = queryResult.fulfillmentMessages;
-
-    // 🔄 วนลูปเพื่อหา Custom Payload และแทนที่ตัวแปร ###
-    messages = messages.map(msg => {
-      if (msg.payload && msg.payload.line) {
-        // ✅ ส่งทั้ง userId, โครงสร้าง Flex และเบอร์โทรศัพท์ ไปประมวลผล
-        msg.payload.line = createDynamicMemberCard(userId, msg.payload.line, phone);
-      }
-      return msg;
-    });
-
-    // 3. สร้าง Response กลับไปหา Dialogflow
-    const response = {
-      "fulfillmentMessages": messages
+  // เพิ่ม Quick Reply สำหรับ Fallback และ main-menu intent
+  const QUICK_REPLY_INTENTS = ['Default Fallback Intent', 'main-menu'];
+  if (QUICK_REPLY_INTENTS.includes(intentName)) {
+    responseObj.quickReply = {
+      items: [
+        { type: 'action', action: { type: 'message', label: 'ติดต่อแอดมิน',      text: 'ติดต่อแอดมิน'      } },
+        { type: 'action', action: { type: 'message', label: 'โปรโมชั่นสมาชิก',   text: 'โปรโมชั่นสมาชิก'   } },
+        { type: 'action', action: { type: 'message', label: 'เมนูหลัก',           text: 'เมนูหลัก'           } }
+      ]
     };
-
-    return createJsonResponse(response);
   }
 
-  // หากเป็น Intent อื่นที่ไม่ได้ระบุไว้ ให้ Dialogflow ตอบตามปกติ
-  return createJsonResponse({});
+  _safePushMessage(userId, responseObj);
+  return String(text);
+}
+
+/**
+ * Push message แบบปลอดภัย — ไม่ throw แม้จะ fail
+ * [FIX-03] ใช้ push แทน reply เพื่อหลีกเลี่ยงปัญหา reply token expired
+ *
+ * @param {string}        userId  - LINE User ID
+ * @param {string|object|Array} message - ข้อความหรือ message object
+ */
+function _safePushMessage(userId, message) {
+  try {
+    sendMessage(userId, message);
+  } catch (e) {
+    console.error(`❌ [_safePushMessage] sendMessage failed for userId ${userId}: ${e.message}`);
+  }
 }

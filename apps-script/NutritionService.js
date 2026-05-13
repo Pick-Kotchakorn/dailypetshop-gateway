@@ -1,37 +1,31 @@
 /**
- * 🐾 NUTRITIONSERVICE.gs - Daily Pet Shop (Version: Daily ครับ)
+ * 🐾 NUTRITIONSERVICE.js - Daily Pet Shop (AI Recommender V3.1)
+ *
+ * Fixes v3.1:
+ *   [N1] replyToken misuse — เปลี่ยนทุกจุดจาก replyMessage(replyToken, ...) → sendMessage(userId, ...)
+ *        เนื่องจาก EventHandler.js เรียก startNutritionConsultation(userId) โดยไม่ส่ง replyToken
+ *        และ nutrition flow เป็น push-based อยู่แล้ว
+ *   [N2] ลบ parameter replyToken ออกจาก signature ของทุกฟังก์ชันที่ไม่ได้ใช้งาน
+ *   [N3] Column index ของ Products sheet ยืนยันแล้วว่าถูกต้องตาม setupDatabase() ใน SheetService.js
+ *        (22 คอลัมน์: Tags_For_AI = p[19], Image_URL = p[20], Description = p[21])
+ *        — ห้ามใช้ createProductsSheet() ใน Setup.js อีกต่อไป เพราะมีแค่ 9 คอลัมน์
  */
 
-function startNutritionConsultation(userId, replyToken) {
-  try {
-    sendLoadingAnimation(userId); 
-    
-    const profile = typeof getCustomerProfile === 'function' ? getCustomerProfile(userId) : null; 
-    let greeting = "สวัสดีครับคุณลูกค้า ผม 'เดลี่' พร้อมดูแลน้องแมวแล้วครับ 🐾";
-    
-    if (profile && profile.name) {
-      greeting = `ยินดีที่ได้พบกันอีกนะครับคุณ ${profile.name} วันนี้ให้เดลี่ช่วยดูแลเรื่องโภชนาการน้องแมวส่วนไหนดีครับ?`;
-    }
-
-    // บันทึกกิจกรรมลง Log
-    logNutritionActivity(userId, "START", greeting); 
-    
-    // ✨ ส่งต่อ replyToken ไปยังฟังก์ชันส่งคำถามข้อที่ 1
-    sendNutritionQuestion(userId, 1, replyToken);
-    
-  } catch (e) {
-    console.error("❌ startNutritionConsultation Error: " + e.message);
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. ส่งคำถาม Quiz แบบ Premium Flex Message (push-based)
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * 🎨 ฟังก์ชันส่งคำถามรูปแบบ Premium Flex Message (ใช้ replyToken เพื่อส่งฟรี)
+ * ส่ง Nutrition Quiz ขั้นตอนที่ step ไปให้ผู้ใช้
+ * [N1] ใช้ sendMessage(userId, ...) แทน replyMessage(replyToken, ...)
+ * [N2] ลบ parameter replyToken ออกจาก signature
+ * @param {string} userId  - LINE User ID
+ * @param {number} step    - ขั้นตอนปัจจุบัน (1–5)
  */
-function sendNutritionQuestion(userId, step, replyToken) {
+function sendNutritionQuestion(userId, step) {
   let questionText = "";
   let options = [];
 
-  // กำหนดคำถามและคำลงท้าย "ครับ"
   switch (step) {
     case 1:
       questionText = "น้องแมวอยู่ในช่วงวัยไหนครับ? 🐱";
@@ -75,7 +69,7 @@ function sendNutritionQuestion(userId, step, replyToken) {
       break;
   }
 
-  // สร้างแถบ Progress Bar แบบ Dynamic
+  // Progress Bar แบบ Dynamic
   const progressBar = [];
   for (let i = 1; i <= 5; i++) {
     progressBar.push({
@@ -159,255 +153,169 @@ function sendNutritionQuestion(userId, step, replyToken) {
     }
   };
 
-  // ใช้ replyMessage แทน sendMessage เพื่อความเร็วและประหยัดโควต้า
-  replyMessage(replyToken, {
+  // [N1] push-based: ใช้ sendMessage แทน replyMessage เพราะ replyToken ไม่ถูกส่งมาใน flow นี้
+  sendMessage(userId, {
     "type": "flex",
     "altText": "เดลี่มีแบบสอบถามโภชนาการมาฝากครับ",
     "contents": flexContents
   });
 }
 
-/**
- * 🛠️ จัดการข้อมูลเมื่อลูกค้าตอบคำถาม (แบบลด Latency)
- */
-function handleNutritionStep(userId, step, value, replyToken) {
 
-  logNutritionActivity(userId, `STEP_${step}`, value); 
-  
-  if (step < CONFIG.NUTRITION.QUESTION_STEPS) {
-    sendNutritionQuestion(userId, step + 1, replyToken);
-  } else {
-    evaluateNutritionAndRecommend(userId, replyToken);
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. Entry Point & Step Handler
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * เริ่มต้น Nutrition Consultation
+ * [N2] ลบ parameter replyToken ออก — ใช้ sendMessage ภายใน
+ * @param {string} userId - LINE User ID
+ */
+function startNutritionConsultation(userId) {
+  try {
+    sendLoadingAnimation(userId);
+    const profile = getCustomerProfile(userId);
+    // greeting ถูก build ไว้แต่ส่งแยก step แรกผ่าน sendNutritionQuestion
+    if (profile && profile.name) {
+      sendMessage(userId,
+        `ยินดีที่ได้พบกันอีกนะครับคุณ ${profile.name} ` +
+        `วันนี้ให้เดลี่ช่วยดูแลเรื่องโภชนาการน้องแมวส่วนไหนดีครับ?`
+      );
+    } else {
+      sendMessage(userId,
+        "สวัสดีครับคุณลูกค้า ผม 'เดลี่' พร้อมดูแลน้องแมวแล้วครับ 🐾"
+      );
+    }
+    // [N1][N2] ส่ง step 1 โดยไม่ต้องการ replyToken
+    sendNutritionQuestion(userId, 1);
+  } catch (e) {
+    console.error("❌ [startNutritionConsultation]", e.message);
   }
 }
 
 /**
- * 🎯 วิเคราะห์และแนะนำสินค้า (เวอร์ชัน "เดลี่" ครับ)
+ * จัดการแต่ละ step ของ Quiz
+ * [N2] ลบ parameter replyToken ออก
+ * @param {string} userId - LINE User ID
+ * @param {number} step   - ขั้นตอนที่ตอบมา (1–5)
+ * @param {string} value  - คำตอบที่เลือก
  */
-function evaluateNutritionAndRecommend(userId, replyToken) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const logSheet = ss.getSheetByName(CONFIG.NUTRITION.SHEET_NAME);
-  const productSheet = ss.getSheetByName(CONFIG.SHEET_NAME.PRODUCTS);
-  
-  const logData = logSheet.getDataRange().getValues();
-  const userAnswers = logData
-    .filter(row => row[1] === userId && row[2].startsWith("STEP_"))
-    .slice(-5)
-    .map(row => row[3]);
-
-  const products = productSheet.getDataRange().getValues().slice(1);
-  let recommended = products.filter(p => {
-    const tags = p[7].toString().toLowerCase();
-    return userAnswers.some(ans => tags.includes(ans.toLowerCase()));
-  });
-
-  if (recommended.length === 0) recommended = products.slice(0, 3);
-
-  // 1. สร้างการ์ดสินค้าแนะนำ (ขนาด Mega) ตามดีไซน์ใหม่
-  const carouselContents = recommended.slice(0, 3).map(p => ({
-    "type": "bubble",
-    "size": "mega",
-    "hero": {
-      "type": "image",
-      "url": p[8] || "https://via.placeholder.com/300",
-      "size": "full",
-      "aspectMode": "cover",
-      "aspectRatio": "4:3"
-    },
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "paddingAll": "16px",
-      "spacing": "sm",
-      "contents": [
-        {
-          "type": "box",
-          "layout": "horizontal",
-          "contents": [
-            {
-              "type": "box",
-              "layout": "vertical",
-              "cornerRadius": "99px",
-              "backgroundColor": "#c84528",
-              "paddingTop": "3px",
-              "paddingBottom": "3px",
-              "paddingStart": "10px",
-              "paddingEnd": "10px",
-              "contents": [
-                {
-                  "type": "text",
-                  "text": "แนะนำ",
-                  "size": "xxs",
-                  "weight": "bold",
-                  "color": "#f4f0e5"
-                }
-              ],
-              "flex": 0
-            },
-            { "type": "filler" }
-          ]
-        },
-        {
-          "type": "text",
-          "text": p[1],
-          "weight": "bold",
-          "size": "lg",
-          "wrap": true,
-          "color": "#532f16",
-          "margin": "sm"
-        },
-        {
-          "type": "text",
-          "text": `ราคา ${p[6]} บาท`,
-          "color": "#C84528",
-          "weight": "bold",
-          "margin": "none",
-          "size": "md"
-        },
-        {
-          "type": "text",
-          "text": `เหมาะสำหรับ: ${p[4]}`,
-          "size": "sm",
-          "color": "#888888",
-          "wrap": true,
-          "margin": "xs"
-        }
-      ]
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "paddingAll": "14px",
-      "contents": [
-        {
-          "type": "button",
-          "style": "primary",
-          "color": "#C84528",
-          "action": {
-            "type": "message",
-            "label": "สั่งซื้อ",
-            "text": `สนใจสั่งซื้อ ${p[1]} ครับ`
-          }
-        }
-      ]
-    },
-    "styles": {
-      "body": { "backgroundColor": "#ffffff" },
-      "footer": { "backgroundColor": "#ffffff" }
-    }
-  }));
-
-  // 2. เพิ่มการ์ดใบสุดท้าย (Contact/CTA) ตามดีไซน์ใหม่
-  carouselContents.push({
-    "type": "bubble",
-    "size": "mega",
-    "body": {
-      "type": "box",
-      "layout": "vertical",
-      "paddingTop": "14px",
-      "paddingBottom": "0px",
-      "paddingStart": "18px",
-      "paddingEnd": "18px",
-      "spacing": "sm",
-      "contents": [
-        {
-          "type": "text",
-          "text": "สนใจสั่งซื้อ\nหรือปรึกษาเพิ่มเติม?",
-          "weight": "bold",
-          "size": "lg",
-          "wrap": true,
-          "align": "center",
-          "color": "#532f16",
-          "margin": "xxl"
-        },
-        {
-          "type": "text",
-          "text": "เดลี่รวบรวมช่องทางติดต่อ\nและสั่งซื้อออนไลน์ไว้ที่นี่",
-          "size": "sm",
-          "color": "#888888",
-          "wrap": true,
-          "align": "center"
-        },
-        { "type": "separator", "margin": "lg", "color": "#F0E0D8" },
-        {
-          "type": "box",
-          "layout": "horizontal",
-          "margin": "lg",
-          "contents": [
-            {
-              "type": "box",
-              "layout": "vertical", "flex": 1, "spacing": "xs",
-              "contents": [
-                { "type": "text", "text": "🚚", "align": "center", "size": "lg" },
-                { "type": "text", "text": "จัดส่งด่วน", "align": "center", "size": "xxs", "color": "#C84528", "weight": "bold" }
-              ]
-            },
-            {
-              "type": "box",
-              "layout": "vertical", "flex": 1, "spacing": "xs",
-              "contents": [
-                { "type": "text", "text": "💬", "align": "center", "size": "lg" },
-                { "type": "text", "text": "ปรึกษาฟรี", "align": "center", "size": "xxs", "color": "#C84528", "weight": "bold" }
-              ]
-            },
-            {
-              "type": "box",
-              "layout": "vertical", "flex": 1, "spacing": "xs",
-              "contents": [
-                { "type": "text", "text": "✅", "align": "center", "size": "lg" },
-                { "type": "text", "text": "ของแท้ 100%", "align": "center", "size": "xxs", "color": "#C84528", "weight": "bold" }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "footer": {
-      "type": "box",
-      "layout": "vertical",
-      "paddingAll": "14px",
-      "contents": [
-        {
-          "type": "button",
-          "style": "primary",
-          "color": "#C84528",
-          "action": {
-            "type": "uri",
-            "label": "ไปที่ร้านค้าออนไลน์",
-            "uri": "https://linktr.ee/daily.pet.shop.shop.online"
-          }
-        }
-      ]
-    },
-    "styles": {
-      "footer": { "backgroundColor": "#FFF8F4" }
-    }
-  });
-
-  // 3. ส่งคำตอบกลับแบบ Flex Carousel
-  replyMessage(replyToken, [
-    { "type": "text", "text": "วิเคราะห์เรียบร้อยครับ! จากข้อมูลที่คุณให้มา เดลี่เลือกอาหารที่เหมาะกับน้องแมวที่สุดมาให้แล้วครับ 🐾" },
-    {
-      "type": "flex",
-      "altText": "เดลี่แนะนำสินค้าสำหรับน้องแมวครับ",
-      "contents": { "type": "carousel", "contents": carouselContents }
-    }
-  ]);
-  
-  logNutritionActivity(userId, "COMPLETED", `Recommended ${recommended.length} items`);
+function handleNutritionStep(userId, step, value) {
+  logNutritionActivity(userId, `STEP_${step}`, value);
+  if (step < CONFIG.NUTRITION.QUESTION_STEPS) {
+    // [N1][N2] ต่อ step ถัดไปด้วย push message
+    sendNutritionQuestion(userId, step + 1);
+  } else {
+    // [N1][N2] ครบ 5 ข้อ → วิเคราะห์และแนะนำสินค้า
+    evaluateNutritionAndRecommend(userId);
+  }
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. AI Recommendation Engine
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * 5. ฟังก์ชันบันทึกกิจกรรมลงชีต (Helper)
+ * วิเคราะห์คำตอบ Quiz และแนะนำสินค้าที่เหมาะสม
+ * [N1] ใช้ sendMessage(userId, ...) แทน replyMessage(replyToken, ...)
+ * [N2] ลบ parameter replyToken ออก
+ * [N3] Column indices ถูกต้องตาม setupDatabase() (22 คอลัมน์):
+ *      p[0]=Product_ID  p[1]=Product_Name  p[2]=Category  p[13]=Price
+ *      p[19]=Tags_For_AI  p[20]=Image_URL  p[21]=Description
+ *      ** ต้องสร้าง sheet ด้วย setupDatabase() ใน SheetService.js เท่านั้น
+ *         ห้ามใช้ createProductsSheet() ใน Setup.js (schema แค่ 9 คอลัมน์) **
+ * @param {string} userId - LINE User ID
+ */
+function evaluateNutritionAndRecommend(userId) {
+  try {
+    const ss = getSS();
+    const logSheet = ss.getSheetByName(CONFIG.NUTRITION.SHEET_NAME);
+    const productSheet = ss.getSheetByName(CONFIG.SHEET_NAME.PRODUCTS);
+
+    const logData = logSheet.getDataRange().getValues();
+
+    // ดึงเฉพาะ 5 คำตอบล่าสุดของ userId นี้ (column 4 = User Answer, index 4)
+    const userAnswers = logData
+      .filter(row => row[1] === userId)
+      .slice(-5)
+      .map(row => row[4].toString().toLowerCase());
+
+    const products = productSheet.getDataRange().getValues().slice(1); // ตัด header
+
+    // 🧠 Smart Tag Matching กับ Tags_For_AI (p[19]) และ Category (p[2])
+    let recommended = products.filter(p => {
+      const aiTags  = p[19] ? p[19].toString().toLowerCase() : ""; // [N3] Tags_For_AI
+      const category = p[2]  ? p[2].toString().toLowerCase()  : "";
+
+      const matchCount = userAnswers.filter(
+        ans => aiTags.includes(ans) || category.includes(ans)
+      ).length;
+      return matchCount >= 2; // ต้องตรงอย่างน้อย 2 จุด
+    });
+
+    // Fallback: ถ้าไม่มีสินค้าที่ตรง → ใช้ 3 รายการแรก (bestseller order)
+    if (recommended.length === 0) recommended = products.slice(0, 3);
+
+    // สร้าง Carousel (สูงสุด 3 ใบ)
+    const carouselContents = recommended.slice(0, 3).map(p => ({
+      "type": "bubble",
+      "size": "mega",
+      "hero": {
+        "type": "image",
+        "url": p[20] || "https://via.placeholder.com/300", // [N3] Image_URL
+        "size": "full", "aspectMode": "cover", "aspectRatio": "4:3"
+      },
+      "body": {
+        "type": "box", "layout": "vertical", "paddingAll": "16px", "spacing": "sm",
+        "contents": [
+          { "type": "text", "text": p[1],              "weight": "bold", "size": "lg",  "color": "#532f16" },  // Product_Name
+          { "type": "text", "text": `ราคา ฿${p[13]}`, "weight": "bold",               "color": CONFIG.COLORS.PRIMARY }, // Price
+          { "type": "text", "text": p[21] || "",       "size": "xs",                   "color": "#888888", "wrap": true } // Description
+        ]
+      },
+      "footer": {
+        "type": "box", "layout": "vertical", "contents": [
+          {
+            "type": "button", "style": "primary", "color": CONFIG.COLORS.PRIMARY,
+            "action": { "type": "message", "label": "สั่งซื้อ", "text": `สนใจสั่งซื้อ ${p[1]} ครับ` }
+          }
+        ]
+      }
+    }));
+
+    // [N1] push-based: ส่งผลลัพธ์ด้วย sendMessage แทน replyMessage
+    sendMessage(userId, [
+      { "type": "text", "text": "เดลี่วิเคราะห์ข้อมูลและเลือกสินค้าที่เหมาะที่สุดมาให้แล้วครับ 🐾" },
+      {
+        "type": "flex",
+        "altText": "สินค้าแนะนำสำหรับน้องแมว",
+        "contents": { "type": "carousel", "contents": carouselContents }
+      }
+    ]);
+  } catch (e) {
+    console.error("❌ [evaluateNutritionAndRecommend]", e.message);
+    // Fallback message ถ้าเกิด error ระหว่างประมวลผล
+    sendMessage(userId, "ขออภัยครับ ระบบวิเคราะห์โภชนาการขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้งนะครับ 🙏");
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. Logging
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * บันทึก activity ของ Nutrition Quiz ลง Nutrition_Logs sheet
+ * @param {string} userId - LINE User ID
+ * @param {string} step   - ชื่อ step เช่น "STEP_1"
+ * @param {string} value  - คำตอบที่เลือก
  */
 function logNutritionActivity(userId, step, value) {
-  const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  let sheet = ss.getSheetByName(CONFIG.NUTRITION.SHEET_NAME);
-  
-  if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.NUTRITION.SHEET_NAME);
-    sheet.appendRow(["Timestamp", "UserID", "Step", "Value"]);
+  try {
+    const sheet = getSheet(CONFIG.NUTRITION.SHEET_NAME);
+    sheet.appendRow([new Date(), userId, step, "Question Step", value, "Recorded"]);
+  } catch (e) {
+    console.error("❌ [logNutritionActivity]", e.message);
   }
-  
-  sheet.appendRow([new Date(), userId, step, value]);
 }

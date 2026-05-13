@@ -1,23 +1,44 @@
 /**
- * 🎫 FlexService.gs - Daily Pet Shop (Dialogflow Support Version)
+ * 🎫 FLEXSERVICE.js - Daily Pet Shop (Dialogflow Support Version — v3.1)
  * หน้าที่: สร้างโครงสร้าง JSON ของ Flex Message เพื่อส่งกลับไปให้ Dialogflow
+ *
+ * Fixes v3.1:
+ *   [F1] getFlexMemberSummary() — property mismatch:
+ *        summary.pointsToNext  → summary.pointsToNextTier  (canonical key จาก _buildSummary)
+ *        summary.nextTier      → summary.nextTierName       (canonical key จาก _buildSummary)
+ *        ก่อนแก้: แสดง "undefined แต้ม เพื่อเป็น undefined" ใน Flex body ทุกครั้ง
+ *   [F2] createDynamicMemberCard() — แก้ key ให้ตรงกันทั้ง ### placeholder replacements
+ *        (pointsToNext → pointsToNextTier, nextTier → nextTierName)
+ *        และลบ defensive check `typeof getMemberSummary === 'function'` ออก
+ *        เพราะ Membership.js compile อยู่ใน project เดียวกันเสมอ
  */
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. Member Summary Flex Card
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * 🐾 1. ฟังก์ชันหลักสำหรับดึง Flex Message สมาชิก (ผ่านเบอร์โทรศัพท์)
+ * 🐾 สร้าง Flex Message แสดงข้อมูลสมาชิก (ใช้ส่งตอบ Dialogflow)
+ * รับ summary object จาก getMemberSummary() หรือ getMemberSummaryByPhone()
+ *
+ * Keys ที่ใช้จาก summary (_buildSummary ใน Membership.js):
+ *   .name, .tier, .points, .pointsToNextTier [F1], .nextTierName [F1], .progress
+ *
+ * @param {Object} summary - object จาก _buildSummary()
+ * @returns {Object|null}  - Flex bubble JSON หรือ null ถ้าไม่มีข้อมูล
  */
 function getFlexMemberSummary(summary) {
   if (!summary) return null;
 
   const fmt = (num) => Number(num || 0).toLocaleString('th-TH');
-  
-  // ใช้สีตามระดับสมาชิกจาก Config
+
+  // สีตามระดับสมาชิกจาก Config
   let tierColor = CONFIG.COLORS.TIER.BRONZE;
-  if (summary.tier.includes("Silver")) tierColor = CONFIG.COLORS.TIER.SILVER;
-  if (summary.tier.includes("Gold")) tierColor = CONFIG.COLORS.TIER.GOLD;
+  if (summary.tier.includes("Silver"))   tierColor = CONFIG.COLORS.TIER.SILVER;
+  if (summary.tier.includes("Gold"))     tierColor = CONFIG.COLORS.TIER.GOLD;
   if (summary.tier.includes("Platinum")) tierColor = CONFIG.COLORS.TIER.PLATINUM;
 
-  // ส่งคืนโครงสร้าง JSON ให้ Dialogflow นำไปตอบลูกค้า
   return {
     "type": "bubble",
     "size": "mega",
@@ -56,8 +77,8 @@ function getFlexMemberSummary(summary) {
               "type": "box",
               "layout": "horizontal",
               "contents": [
-                { "type": "text", "text": "ชื่อสมาชิก", "size": "sm", "color": "#555555" },
-                { "type": "text", "text": summary.name, "size": "sm", "color": "#111111", "align": "end", "weight": "bold" }
+                { "type": "text", "text": "ชื่อสมาชิก",  "size": "sm", "color": "#555555" },
+                { "type": "text", "text": summary.name,  "size": "sm", "color": "#111111", "align": "end", "weight": "bold" }
               ]
             },
             {
@@ -65,19 +86,16 @@ function getFlexMemberSummary(summary) {
               "layout": "horizontal",
               "contents": [
                 { "type": "text", "text": "ระดับสมาชิก", "size": "sm", "color": "#555555" },
-                { "type": "text", "text": summary.tier, "size": "sm", "color": tierColor, "align": "end", "weight": "bold" }
+                { "type": "text", "text": summary.tier,  "size": "sm", "color": tierColor,  "align": "end", "weight": "bold" }
               ]
             },
-            {
-              "type": "separator",
-              "margin": "md"
-            },
+            { "type": "separator", "margin": "md" },
             {
               "type": "box",
               "layout": "horizontal",
               "margin": "md",
               "contents": [
-                { "type": "text", "text": "คะแนนปัจจุบัน", "size": "md", "weight": "bold" },
+                { "type": "text", "text": "คะแนนปัจจุบัน",                    "size": "md", "weight": "bold" },
                 { "type": "text", "text": fmt(summary.points) + " แต้ม", "size": "md", "color": CONFIG.COLORS.PRIMARY, "align": "end", "weight": "bold" }
               ]
             }
@@ -90,7 +108,8 @@ function getFlexMemberSummary(summary) {
           "contents": [
             {
               "type": "text",
-              "text": "อีกเพียง " + fmt(summary.pointsToNext) + " แต้ม เพื่อเป็น " + summary.nextTier,
+              // [F1] ใช้ canonical keys: pointsToNextTier และ nextTierName
+              "text": "อีกเพียง " + fmt(summary.pointsToNextTier) + " แต้ม เพื่อเป็น " + summary.nextTierName,
               "size": "xs",
               "color": "#888888",
               "margin": "xs"
@@ -106,7 +125,8 @@ function getFlexMemberSummary(summary) {
                 {
                   "type": "box",
                   "layout": "vertical",
-                  "width": summary.progress + "%",
+                  // progress คืนมาจาก _buildSummary() เสมอ (0–100)
+                  "width": (summary.progress || 0) + "%",
                   "backgroundColor": CONFIG.COLORS.SECONDARY,
                   "height": "6px",
                   "cornerRadius": "sm"
@@ -133,38 +153,50 @@ function getFlexMemberSummary(summary) {
   };
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. Dynamic Member Card (Placeholder Replacement)
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * 🔄 ฟังก์ชันสำหรับแทนที่ Placeholder ### ด้วยข้อมูลจริงจากฐานข้อมูล
- * รองรับการทำงานทั้งผ่าน userId และการค้นหาผ่าน parameters (เบอร์โทร)
+ * 🔄 แทนที่ Placeholder ### ด้วยข้อมูลจริงจากฐานข้อมูล
+ * รองรับการทำงานทั้งผ่าน userId และการค้นหาผ่าน phone (จาก Dialogflow parameters)
+ *
+ * [F2] แก้ key ให้ตรงกับ canonical keys จาก _buildSummary():
+ *      ###NEXT_TIER_POINTS### → summary.pointsToNextTier (เดิมใช้ summary.pointsToNext)
+ *      ###NEXT_TIER###        → summary.nextTierName      (เดิมใช้ summary.nextTier)
+ *
+ * @param {string}      userId      - LINE User ID
+ * @param {Object}      flexJson    - Flex JSON template ที่มี ### placeholders
+ * @param {string|null} phoneFromDf - เบอร์โทรที่ Dialogflow ส่งมา (optional)
+ * @returns {Object} Flex JSON ที่แทนที่ค่าแล้ว หรือ flexJson เดิมถ้าไม่พบสมาชิก
  */
 function createDynamicMemberCard(userId, flexJson, phoneFromDf = null) {
-  // 1. ดึงข้อมูลสรุปสมาชิก 
-  // หากมีเบอร์โทรส่งมาจาก Dialogflow ให้ใช้ getMemberSummaryByPhone
-  // หากไม่มี ให้ใช้ getMemberSummary (ดึงตาม userId ปกติ)
-  let summary;
-  if (phoneFromDf) {
-    summary = getMemberSummaryByPhone(phoneFromDf);
-  } else {
-    // หมายเหตุ: คุณต้องมีฟังก์ชัน getMemberSummary(userId) ใน Membership.gs ด้วย
-    summary = typeof getMemberSummary === 'function' ? getMemberSummary(userId) : null;
-  }
+  // 1. ดึงข้อมูลสรุปสมาชิก
+  //    ถ้ามีเบอร์โทรจาก Dialogflow → ค้นหาผ่านเบอร์
+  //    ถ้าไม่มี → ดึงตาม userId ปกติ
+  const summary = phoneFromDf
+    ? getMemberSummaryByPhone(phoneFromDf)
+    : getMemberSummary(userId); // [F2] ลบ defensive typeof check — function อยู่ใน project เดียวกัน
 
-  // กรณีไม่พบข้อมูลสมาชิก ให้ส่ง Flex เดิมกลับไป (หรือจัดการตามความเหมาะสม)
+  // ถ้าไม่พบสมาชิก ส่ง template เดิมกลับโดยไม่แก้ไข
   if (!summary) return flexJson;
 
-  // 2. แปลง JSON เป็น String เพื่อทำการ Replace ตัวแปรทั้งหมด
+  // 2. แปลงเป็น String เพื่อ replace
   let jsonStr = JSON.stringify(flexJson);
 
-  // 3. เริ่มการแทนที่ตัวแปร ### ตาม Key ที่คืนมาจาก getMemberSummaryByPhone
-  jsonStr = jsonStr.replace(/###MEMBER_NAME###/g, summary.name || "คุณลูกค้า");
-  jsonStr = jsonStr.replace(/###TEL###/g, summary.tel || "-");
-  jsonStr = jsonStr.replace(/###TIER###/g, summary.tier || "Bronze Friend");
-  jsonStr = jsonStr.replace(/###POINTS###/g, Number(summary.points).toLocaleString());
-  jsonStr = jsonStr.replace(/###NEXT_TIER_POINTS###/g, Number(summary.pointsToNext).toLocaleString());
-  jsonStr = jsonStr.replace(/###NEXT_TIER###/g, summary.nextTier || "-");
-  jsonStr = jsonStr.replace(/###PROGRESS###/g, summary.progress || "0");
-  jsonStr = jsonStr.replace(/###TODAY###/g, summary.today || "");
+  // 3. แทนที่ ### placeholders ทั้งหมด
+  jsonStr = jsonStr.replace(/###MEMBER_NAME###/g,    summary.name              || "คุณลูกค้า");
+  jsonStr = jsonStr.replace(/###TEL###/g,            summary.tel               || "-");
+  jsonStr = jsonStr.replace(/###TIER###/g,           summary.tier              || "Bronze Friend");
+  jsonStr = jsonStr.replace(/###POINTS###/g,         Number(summary.points).toLocaleString());
+  // [F2] canonical key: pointsToNextTier แทน pointsToNext
+  jsonStr = jsonStr.replace(/###NEXT_TIER_POINTS###/g, Number(summary.pointsToNextTier).toLocaleString());
+  // [F2] canonical key: nextTierName แทน nextTier
+  jsonStr = jsonStr.replace(/###NEXT_TIER###/g,      summary.nextTierName      || "-");
+  jsonStr = jsonStr.replace(/###PROGRESS###/g,       summary.progress          || "0");
+  jsonStr = jsonStr.replace(/###TODAY###/g,          summary.today             || "");
 
-  // 4. แปลงกลับเป็น Object เพื่อส่งออกไปใช้งาน
+  // 4. แปลงกลับเป็น Object
   return JSON.parse(jsonStr);
 }
